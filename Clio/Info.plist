@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Clio needs microphone access to record and transcribe meetings.</string>
+	<key>NSScreenCaptureUsageDescription</key>
+	<string>Clio needs screen recording permission to capture system audio from meetings.</string>
+	<key>NSAppleEventsUsageDescription</key>
+	<string>Clio needs automation access to export notes to Apple Notes.</string>
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsArbitraryLoads</key>
+		<false/>
+	</dict>
+</dict>
+</plist>
