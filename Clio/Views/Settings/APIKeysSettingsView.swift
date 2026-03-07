@@ -141,15 +141,14 @@ struct LLMProviderSetupCard: View {
     let viewModel: SettingsViewModel
 
     @State private var isExpanded = false
+    @State private var ollamaHelper = OllamaInstallHelper()
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             // Header row — always visible
             Button {
-                if provider.requiresAPIKey {
-                    withAnimation(.easeInOut(duration: 0.2)) {
-                        isExpanded.toggle()
-                    }
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    isExpanded.toggle()
                 }
             } label: {
                 HStack(spacing: 10) {
@@ -167,32 +166,60 @@ struct LLMProviderSetupCard: View {
 
                     Spacer()
 
-                    if isConfigured {
+                    if provider == .ollama {
+                        if ollamaHelper.isReachable {
+                            Label("Running", systemImage: "checkmark.circle.fill")
+                                .font(.system(size: 12))
+                                .foregroundStyle(.green)
+                        } else if ollamaHelper.state == .installed {
+                            Label("Not running", systemImage: "exclamationmark.circle")
+                                .font(.system(size: 12))
+                                .foregroundStyle(.orange)
+                        } else if ollamaHelper.state == .notInstalled {
+                            Text("Not installed")
+                                .font(.system(size: 12))
+                                .foregroundStyle(.blue)
+                        } else {
+                            Label("No key needed", systemImage: "checkmark.circle")
+                                .font(.system(size: 12))
+                                .foregroundStyle(.secondary)
+                        }
+                    } else if isConfigured {
                         Label("Configured", systemImage: "checkmark.circle.fill")
                             .font(.system(size: 12))
                             .foregroundStyle(.green)
-                    } else if !provider.requiresAPIKey {
-                        Label("No key needed", systemImage: "checkmark.circle")
-                            .font(.system(size: 12))
-                            .foregroundStyle(.secondary)
                     } else {
                         Text("Set up")
                             .font(.system(size: 12))
                             .foregroundStyle(.blue)
                     }
 
-                    if provider.requiresAPIKey {
-                        Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
-                            .font(.system(size: 11))
-                            .foregroundStyle(.tertiary)
-                    }
+                    Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
+                        .font(.system(size: 11))
+                        .foregroundStyle(.tertiary)
                 }
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             .padding(12)
+            .task {
+                if provider == .ollama {
+                    await ollamaHelper.check()
+                }
+            }
 
-            // Expandable setup section
+            // Ollama-specific expandable section
+            if isExpanded && provider == .ollama {
+                Divider()
+                    .padding(.horizontal, 12)
+
+                VStack(alignment: .leading, spacing: 8) {
+                    OllamaSetupView(helper: ollamaHelper)
+                }
+                .padding(12)
+            }
+
+            // Expandable setup section for API key providers
             if isExpanded && provider.requiresAPIKey {
                 Divider()
                     .padding(.horizontal, 12)

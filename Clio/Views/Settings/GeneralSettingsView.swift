@@ -1,4 +1,5 @@
 import SwiftUI
+import Sparkle
 
 struct GeneralSettingsView: View {
     @Bindable var viewModel: SettingsViewModel
@@ -6,6 +7,9 @@ struct GeneralSettingsView: View {
     @AppStorage("autoExportNotion") private var autoExportNotion = false
     @AppStorage("preferredLLMProvider") private var preferredLLMProviderRaw = "ollama"
     @AppStorage("preferredLLMModel") private var preferredLLMModelID = ""
+
+    /// Sparkle updater passed from parent
+    var updater: SPUUpdater?
 
     private var currentProvider: LLMProvider {
         LLMProvider(rawValue: preferredLLMProviderRaw) ?? .ollama
@@ -67,6 +71,24 @@ struct GeneralSettingsView: View {
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .textSelection(.enabled)
+                }
+            }
+
+            if let updater {
+                Section("Updates") {
+                    HStack {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Clio v\(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0.1.0")")
+                                .font(.subheadline)
+                            Text("Automatic updates are enabled")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                        Spacer()
+                        Button("Check for Updates") {
+                            updater.checkForUpdates()
+                        }
+                    }
                 }
             }
         }

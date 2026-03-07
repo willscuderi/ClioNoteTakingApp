@@ -419,6 +419,7 @@ struct LLMProviderCard: View {
     let isSelected: Bool
     @Binding var apiKey: String
     let action: () -> Void
+    @State private var ollamaHelper = OllamaInstallHelper()
 
     var body: some View {
         Button(action: action) {
@@ -453,7 +454,9 @@ struct LLMProviderCard: View {
                         .onSubmit { }
                 }
 
-                if isSelected && !provider.requiresAPIKey {
+                if isSelected && provider == .ollama {
+                    OllamaSetupView(helper: ollamaHelper)
+                } else if isSelected && !provider.requiresAPIKey {
                     VStack(alignment: .leading, spacing: 6) {
                         ForEach(Array(provider.setupSteps.enumerated()), id: \.offset) { index, step in
                             HStack(alignment: .top, spacing: 6) {
@@ -490,6 +493,115 @@ struct LLMProviderCard: View {
             )
         }
         .buttonStyle(.plain)
+    }
+}
+
+// MARK: - Ollama Setup View
+
+struct OllamaSetupView: View {
+    @Bindable var helper: OllamaInstallHelper
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            switch helper.state {
+            case .unknown, .checking:
+                HStack(spacing: 6) {
+                    ProgressView()
+                        .controlSize(.mini)
+                    Text("Checking for Ollama...")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+
+            case .installed:
+                if helper.isReachable {
+                    HStack(spacing: 6) {
+                        Image(systemName: "checkmark.circle.fill")
+                            .foregroundStyle(.green)
+                            .font(.caption)
+                        Text("Ollama is running")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
+                } else {
+                    HStack(spacing: 6) {
+                        Image(systemName: "exclamationmark.circle")
+                            .foregroundStyle(.orange)
+                            .font(.caption)
+                        Text("Ollama installed but not running")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
+                    Text("Open Ollama from your Applications folder")
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
+                }
+
+            case .notInstalled:
+                Text("Ollama runs AI models locally on your Mac — no API key or cloud account needed.")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                if helper.isHomebrewInstalled() {
+                    Button {
+                        helper.installViaHomebrew()
+                    } label: {
+                        Label("Install Ollama", systemImage: "terminal")
+                            .font(.caption2.weight(.medium))
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+                } else {
+                    Button {
+                        helper.openDownloadPage()
+                    } label: {
+                        Label("Download Ollama", systemImage: "arrow.down.circle")
+                            .font(.caption2.weight(.medium))
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+                }
+
+            case .installing:
+                HStack(spacing: 6) {
+                    ProgressView()
+                        .controlSize(.mini)
+                    Text("Installing in Terminal...")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+                Text("Check the Terminal window for progress")
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
+
+            case .installFailed(let msg):
+                HStack(spacing: 6) {
+                    Image(systemName: "exclamationmark.triangle")
+                        .foregroundStyle(.red)
+                        .font(.caption)
+                    Text("Install failed")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+                Text(msg)
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
+                    .lineLimit(2)
+
+                Button {
+                    helper.openDownloadPage()
+                } label: {
+                    Label("Download manually", systemImage: "arrow.up.right.square")
+                        .font(.caption2.weight(.medium))
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+            }
+        }
+        .task {
+            await helper.check()
+        }
     }
 }
 

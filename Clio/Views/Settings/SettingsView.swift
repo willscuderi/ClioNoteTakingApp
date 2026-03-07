@@ -1,14 +1,16 @@
 import SwiftUI
+import Sparkle
 
 struct SettingsView: View {
     @Environment(ServiceContainer.self) private var services
     @State private var viewModel: SettingsViewModel?
+    var updater: SPUUpdater?
 
     var body: some View {
         Group {
             if let viewModel {
                 TabView {
-                    GeneralSettingsView(viewModel: viewModel)
+                    GeneralSettingsView(viewModel: viewModel, updater: updater)
                         .tabItem {
                             Label("General", systemImage: "gear")
                         }

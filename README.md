@@ -2,6 +2,14 @@
 
 Clio is a native macOS app that transcribes your meetings in real time and generates AI-powered summaries, notes, and action items. It runs locally on your Mac, supports multiple AI providers, and integrates with your calendar to detect meetings automatically.
 
+## Download
+
+**[Download Clio v0.1.0](https://github.com/willscuderi/ClioNoteTakingApp/releases/latest)** — Unzip and drag to Applications. No Xcode required.
+
+> **Note:** This build is ad-hoc signed (not notarised). On first launch, right-click the app and choose **Open** to bypass Gatekeeper.
+
+Clio auto-updates via [Sparkle](https://sparkle-project.org/) — once installed, you'll be notified when new versions are available.
+
 ## Features
 
 - **Real-time transcription** — Captures system audio and microphone simultaneously, transcribes live using local [whisper.cpp](https://github.com/ggml-org/whisper.cpp) or OpenAI Whisper API
@@ -13,50 +21,76 @@ Clio is a native macOS app that transcribes your meetings in real time and gener
 - **Folder organisation** — Group and organise meeting recordings into folders
 - **Bookmarks** — Mark key moments during a meeting for quick reference
 - **Global hotkeys** — Start/stop recording and create bookmarks from anywhere
+- **Auto-updates** — Checks for new versions daily via Sparkle
 
 ## Requirements
 
 - macOS 14 Sonoma or later
-- Xcode 16+ (to build)
-- [XcodeGen](https://github.com/yonaskolb/XcodeGen) (`brew install xcodegen`)
-- An API key for at least one AI provider (OpenAI, Anthropic, or Google), or a local Ollama instance
+- An API key for at least one AI provider (OpenAI, Anthropic, or Google), **or** Ollama installed locally
 
-### Whisper Model
+### No API Key? Use Ollama
 
-The local transcription engine requires the whisper.cpp base English model (`ggml-base.en.bin`, ~141 MB). It's too large for Git so you'll need to download it:
+[Ollama](https://ollama.com) runs AI models entirely on your Mac — no API key, no cloud account, no cost. During Clio's setup, select **Ollama** and click **Install** — Clio will install it for you via Homebrew in Terminal. Or install it manually:
 
 ```bash
-# Download into the Resources/Models directory
-curl -L -o Clio/Resources/Models/ggml-base.en.bin \
-  https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.en.bin
+brew install ollama
+ollama serve &
+ollama pull llama3.2
 ```
 
-Alternatively, you can skip local transcription and use the OpenAI Whisper API instead (requires an API key).
+## Supported AI Providers
 
-## Build & Run
+| Provider | What you need |
+|---|---|
+| OpenAI | API key — used for GPT summarisation and/or Whisper transcription |
+| Anthropic (Claude) | API key — used for summarisation |
+| Google (Gemini) | API key — used for summarisation |
+| Ollama | Local install — free, no API key needed. Clio can install it for you |
+
+## Meeting Detection
+
+Clio detects meetings by monitoring your Mac's microphone at the system level. When the mic becomes active and a meeting app is running (Zoom, Teams, Webex, GoToMeeting, or a browser for Google Meet), a floating overlay appears asking if you'd like to start recording. This works even when Clio is minimised.
+
+## Permissions
+
+Clio requests the following system permissions on first launch:
+
+| Permission | Why |
+|---|---|
+| Microphone | Capture your voice during meetings |
+| Screen Recording | Capture system audio from meeting apps |
+| Calendar | Show upcoming meetings and match recordings to events |
+| Automation (Apple Notes) | Export meeting notes to Apple Notes |
+
+## Build from Source
+
+If you want to build Clio yourself instead of using the pre-built download:
 
 ```bash
 # 1. Clone the repo
 git clone https://github.com/willscuderi/ClioNoteTakingApp.git
 cd ClioNoteTakingApp
 
-# 2. Download the whisper model (optional, for local transcription)
+# 2. Install XcodeGen if you don't have it
+brew install xcodegen
+
+# 3. Download the whisper model (optional, for local transcription)
 curl -L -o Clio/Resources/Models/ggml-base.en.bin \
   https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.en.bin
 
-# 3. Generate the Xcode project
+# 4. Generate the Xcode project and build
 xcodegen generate
-
-# 4. Build
 xcodebuild build -scheme Clio -destination "platform=macOS" -project Clio.xcodeproj
 
 # Or open in Xcode
 open Clio.xcodeproj
 ```
 
+**Build requirements:** Xcode 16+, [XcodeGen](https://github.com/yonaskolb/XcodeGen), macOS 14+
+
 ## Architecture
 
-Clio is built with Swift, SwiftUI, and SwiftData — no third-party dependencies beyond whisper.cpp.
+Clio is built with Swift, SwiftUI, and SwiftData. The only external dependency is [Sparkle](https://sparkle-project.org/) for auto-updates (pulled via SPM).
 
 ```
 Clio/
@@ -81,34 +115,6 @@ Clio/
 ```
 
 All services are protocol-based and wired through a `ServiceContainer` injected via SwiftUI's environment. The audio pipeline flows: `AudioCaptureCoordinator` → `AudioMixer` → `AudioBufferManager` → chunks → `TranscriptionCoordinator`.
-
-## Permissions
-
-Clio requests the following system permissions on first launch:
-
-| Permission | Why |
-|---|---|
-| Microphone | Capture your voice during meetings |
-| Screen Recording | Capture system audio from meeting apps |
-| Calendar | Show upcoming meetings and match recordings to events |
-| Automation (Apple Notes) | Export meeting notes to Apple Notes |
-
-## Configuration
-
-On first launch, the onboarding flow walks you through granting permissions and entering API keys. You can change these at any time in **Clio → Settings**.
-
-**Supported AI providers:**
-
-| Provider | What you need |
-|---|---|
-| OpenAI | API key — used for GPT summarisation and/or Whisper transcription |
-| Anthropic (Claude) | API key — used for summarisation |
-| Google (Gemini) | API key — used for summarisation |
-| Ollama | Local install at `http://localhost:11434` — no API key needed |
-
-## Meeting Detection
-
-Clio detects meetings by monitoring your Mac's microphone at the system level. When the mic becomes active and a meeting app is running (Zoom, Teams, Webex, GoToMeeting, or a browser for Google Meet), a floating overlay appears asking if you'd like to start recording. This works even when Clio is minimised.
 
 ## License
 

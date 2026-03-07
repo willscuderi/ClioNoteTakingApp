@@ -1,5 +1,6 @@
 import SwiftUI
 import SwiftData
+import Sparkle
 
 @main
 struct ClioApp: App {
@@ -9,6 +10,7 @@ struct ClioApp: App {
     @State private var onboardingVM: OnboardingViewModel?
     @State private var meetingDetectionPanel = MeetingDetectionPanelController()
     @State private var appRecordingVM: RecordingViewModel?
+    private let updaterController = SPUStandardUpdaterController(startingUpdater: true, updaterDelegate: nil, userDriverDelegate: nil)
 
     init() {
         let schema = Schema([Meeting.self, TranscriptSegment.self, Bookmark.self, MeetingFolder.self])
@@ -83,7 +85,7 @@ struct ClioApp: App {
         .modelContainer(modelContainer)
 
         Settings {
-            SettingsView()
+            SettingsView(updater: updaterController.updater)
                 .environment(services)
         }
         .modelContainer(modelContainer)
