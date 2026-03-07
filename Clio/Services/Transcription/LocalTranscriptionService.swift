@@ -48,17 +48,21 @@ final class LocalTranscriptionService: TranscriptionServiceProtocol {
         // Copy samples from channel 0 (mono)
         let samples = Array(UnsafeBufferPointer(start: channelData[0], count: frameCount))
 
-        // Skip near-silence buffers (RMS < threshold)
+        // Check audio level (for logging) — use a very low threshold to avoid
+        // filtering out quiet speech. Whisper handles silence well on its own.
         let rms = sqrt(samples.reduce(0.0) { $0 + $1 * $1 } / Float(samples.count))
-        if rms < 0.002 {
-            logger.debug("Skipping silent buffer (RMS: \(rms))")
-            // Still advance the time offset for this chunk's duration
+        logger.info("Audio chunk: \(frameCount) samples, RMS: \(String(format: "%.6f", rms))")
+
+        if rms < 0.0005 {
+            logger.info("Skipping near-zero buffer (RMS: \(String(format: "%.6f", rms)))")
             sessionTimeOffset += Double(frameCount) / 16000.0
             return nil
         }
 
         // Run whisper inference
+        logger.info("Running whisper inference on \(samples.count) samples...")
         let whisperSegments = try await ctx.transcribe(samples: samples)
+        logger.info("Whisper returned \(whisperSegments.count) segments")
 
         guard !whisperSegments.isEmpty else {
             sessionTimeOffset += Double(frameCount) / 16000.0

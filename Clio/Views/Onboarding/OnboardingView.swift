@@ -17,19 +17,22 @@ struct OnboardingView: View {
             }
 
             // Step content
-            Group {
-                switch viewModel.currentStep {
-                case .permissions:
-                    PermissionsStepView(viewModel: viewModel)
-                case .transcription:
-                    TranscriptionStepView(viewModel: viewModel)
-                case .llm:
-                    LLMStepView(viewModel: viewModel)
-                case .integrations:
-                    IntegrationsStepView(viewModel: viewModel)
-                case .complete:
-                    CompletionStepView(onComplete: onComplete)
+            ScrollView {
+                Group {
+                    switch viewModel.currentStep {
+                    case .permissions:
+                        PermissionsStepView(viewModel: viewModel)
+                    case .transcription:
+                        TranscriptionStepView(viewModel: viewModel)
+                    case .llm:
+                        LLMStepView(viewModel: viewModel)
+                    case .integrations:
+                        IntegrationsStepView(viewModel: viewModel)
+                    case .complete:
+                        CompletionStepView(onComplete: onComplete)
+                    }
                 }
+                .frame(maxWidth: .infinity)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
 
@@ -133,10 +136,27 @@ struct PermissionsStepView: View {
             }
             .padding(.horizontal, 40)
 
+            if viewModel.screenRecordingNeedsRestart && !viewModel.screenRecordingGranted {
+                HStack(spacing: 6) {
+                    Image(systemName: "arrow.clockwise")
+                        .font(.caption)
+                    Text("If you've already granted Screen Recording in System Settings, you may need to restart Clio for it to take effect.")
+                        .font(.caption)
+                }
+                .foregroundStyle(.secondary)
+                .padding(.horizontal, 40)
+            }
+
             Spacer()
         }
         .padding(.top, 16)
-        .onAppear { viewModel.checkPermissions() }
+        .onAppear {
+            viewModel.checkPermissions()
+            viewModel.startPermissionPolling()
+        }
+        .onDisappear {
+            viewModel.stopPermissionPolling()
+        }
     }
 }
 
@@ -207,24 +227,38 @@ struct TranscriptionStepView: View {
                             .fixedSize(horizontal: false, vertical: true)
 
                         if viewModel.transcriptionChoice == .cloud {
-                            if viewModel.useDeepgram {
-                                SecureField("Deepgram API Key", text: $viewModel.deepgramAPIKey, prompt: Text("Enter key..."))
-                                    .textFieldStyle(.roundedBorder)
-                                    .controlSize(.small)
-                            } else {
-                                SecureField("OpenAI API Key", text: $viewModel.sttAPIKey, prompt: Text("sk-..."))
-                                    .textFieldStyle(.roundedBorder)
-                                    .controlSize(.small)
-                            }
+                            VStack(alignment: .leading, spacing: 6) {
+                                if viewModel.useDeepgram {
+                                    APIKeySetupGuide(
+                                        steps: [
+                                            "Click below to open Deepgram's console",
+                                            "Sign in or create a free account",
+                                            "Go to API Keys and create one",
+                                            "Copy and paste it here"
+                                        ],
+                                        linkLabel: "Open Deepgram Console",
+                                        linkURL: URL(string: "https://console.deepgram.com/")!
+                                    )
 
-                            HStack(spacing: 4) {
-                                if let url = URL(string: "https://platform.openai.com/api-keys") {
-                                    Link("How to get a key", destination: url)
-                                        .font(.caption2)
+                                    SecureField("Deepgram API Key", text: $viewModel.deepgramAPIKey, prompt: Text("Enter key..."))
+                                        .textFieldStyle(.roundedBorder)
+                                        .controlSize(.small)
+                                } else {
+                                    APIKeySetupGuide(
+                                        steps: [
+                                            "Click below to open OpenAI's API keys page",
+                                            "Sign in or create a free account",
+                                            "Click \"Create new secret key\"",
+                                            "Copy and paste it here"
+                                        ],
+                                        linkLabel: "Open OpenAI API Keys",
+                                        linkURL: URL(string: "https://platform.openai.com/api-keys")!
+                                    )
+
+                                    SecureField("OpenAI API Key", text: $viewModel.sttAPIKey, prompt: Text("sk-..."))
+                                        .textFieldStyle(.roundedBorder)
+                                        .controlSize(.small)
                                 }
-                                Text("(takes 2 minutes)")
-                                    .font(.caption2)
-                                    .foregroundStyle(.tertiary)
                             }
 
                             Toggle("Use Deepgram instead", isOn: $viewModel.useDeepgram)
@@ -405,21 +439,42 @@ struct LLMProviderCard: View {
                     .lineLimit(1)
 
                 if isSelected && provider.requiresAPIKey {
+                    if let url = provider.getKeyURL ?? provider.signupURL {
+                        APIKeySetupGuide(
+                            steps: provider.setupSteps,
+                            linkLabel: provider.getLinkLabel,
+                            linkURL: url
+                        )
+                    }
+
                     SecureField("API Key", text: $apiKey, prompt: Text(provider.apiKeyPlaceholder))
                         .textFieldStyle(.roundedBorder)
                         .controlSize(.small)
                         .onSubmit { }
-
-                    if let url = provider.getKeyURL {
-                        Link("How to get your API key", destination: url)
-                            .font(.caption2)
-                    }
                 }
 
                 if isSelected && !provider.requiresAPIKey {
-                    Text("Make sure Ollama is running on your Mac.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                    VStack(alignment: .leading, spacing: 6) {
+                        ForEach(Array(provider.setupSteps.enumerated()), id: \.offset) { index, step in
+                            HStack(alignment: .top, spacing: 6) {
+                                Text("\(index + 1).")
+                                    .font(.caption2.weight(.semibold))
+                                    .foregroundStyle(.secondary)
+                                    .frame(width: 14, alignment: .trailing)
+                                Text(step)
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+
+                        if let url = provider.signupURL {
+                            Link(destination: url) {
+                                Label(provider.getLinkLabel, systemImage: "arrow.up.right.square")
+                                    .font(.caption2.weight(.medium))
+                            }
+                            .padding(.top, 2)
+                        }
+                    }
                 }
             }
             .padding(14)
@@ -446,11 +501,17 @@ struct IntegrationsStepView: View {
     var body: some View {
         VStack(spacing: 20) {
             StepHeader(
-                title: "Where should Clio save your notes?",
-                subtitle: "After each meeting, Clio can automatically send your notes to the apps you already use. Pick one or more:"
+                title: "Connect your calendar & notes",
+                subtitle: "Clio can read your calendar to know when meetings start, and save notes to the apps you already use."
             )
 
+            // Calendar access
             VStack(spacing: 10) {
+                CalendarAccessRow(viewModel: viewModel)
+
+                Divider()
+                    .padding(.horizontal, 8)
+
                 ForEach(ExportFormat.allCases) { format in
                     IntegrationToggleRow(
                         format: format,
@@ -465,6 +526,51 @@ struct IntegrationsStepView: View {
             Spacer()
         }
         .padding(.top, 16)
+        .onAppear {
+            viewModel.checkCalendarAccess()
+        }
+    }
+}
+
+struct CalendarAccessRow: View {
+    @Bindable var viewModel: OnboardingViewModel
+
+    var body: some View {
+        HStack(spacing: 14) {
+            Image(systemName: "calendar")
+                .font(.title3)
+                .frame(width: 28)
+                .foregroundStyle(viewModel.calendarAccessGranted ? Color.accentColor : .secondary)
+
+            VStack(alignment: .leading, spacing: 1) {
+                Text("Calendar")
+                    .font(.subheadline.weight(.medium))
+                Text("Auto-detect meetings from your Mac calendar")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Spacer()
+
+            if viewModel.calendarAccessGranted {
+                HStack(spacing: 4) {
+                    Image(systemName: "checkmark.circle.fill")
+                        .foregroundStyle(.green)
+                        .font(.body)
+                    Text("Connected")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            } else {
+                Button("Connect") {
+                    viewModel.requestCalendarAccess()
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+            }
+        }
+        .padding(12)
+        .background(RoundedRectangle(cornerRadius: 10).fill(.quaternary))
     }
 }
 
@@ -504,9 +610,30 @@ struct IntegrationToggleRow: View {
                 Group {
                     switch format {
                     case .notion:
-                        SecureField("Notion integration token", text: $viewModel.notionToken, prompt: Text("ntn_..."))
-                            .textFieldStyle(.roundedBorder)
-                            .controlSize(.small)
+                        VStack(alignment: .leading, spacing: 8) {
+                            APIKeySetupGuide(
+                                steps: [
+                                    "Click below to open Notion's internal integrations",
+                                    "Click \"New integration\" and give it a name (e.g. \"Clio\")",
+                                    "Copy the \"Internal Integration Secret\"",
+                                    "Paste it here, then share a Notion page with your integration"
+                                ],
+                                linkLabel: "Create Notion Integration",
+                                linkURL: URL(string: "https://www.notion.so/profile/integrations/internal")!
+                            )
+
+                            SecureField("Integration token", text: $viewModel.notionToken, prompt: Text("ntn_..."))
+                                .textFieldStyle(.roundedBorder)
+                                .controlSize(.small)
+
+                            HStack(spacing: 4) {
+                                Image(systemName: "info.circle")
+                                    .font(.caption2)
+                                Text("Clio will create a \"Clio Meeting Notes\" database in your workspace.")
+                                    .font(.caption2)
+                            }
+                            .foregroundStyle(.tertiary)
+                        }
                     case .obsidian:
                         FolderPickerRow(label: "Obsidian vault", path: $viewModel.obsidianVaultPath)
                     case .markdown:
@@ -626,6 +753,34 @@ struct StepHeader: View {
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 40)
+        }
+    }
+}
+
+struct APIKeySetupGuide: View {
+    let steps: [String]
+    let linkLabel: String
+    let linkURL: URL
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            ForEach(Array(steps.enumerated()), id: \.offset) { index, step in
+                HStack(alignment: .top, spacing: 6) {
+                    Text("\(index + 1).")
+                        .font(.caption2.weight(.bold))
+                        .foregroundStyle(Color.accentColor)
+                        .frame(width: 14, alignment: .trailing)
+                    Text(step)
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            Link(destination: linkURL) {
+                Label(linkLabel, systemImage: "arrow.up.right.square")
+                    .font(.caption.weight(.medium))
+            }
+            .padding(.top, 4)
         }
     }
 }

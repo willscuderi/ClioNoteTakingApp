@@ -7,9 +7,11 @@ struct ClioApp: App {
     let modelContainer: ModelContainer
     @State private var showOnboarding = !OnboardingViewModel.hasCompletedOnboarding
     @State private var onboardingVM: OnboardingViewModel?
+    @State private var meetingDetectionPanel = MeetingDetectionPanelController()
+    @State private var appRecordingVM: RecordingViewModel?
 
     init() {
-        let schema = Schema([Meeting.self, TranscriptSegment.self, Bookmark.self])
+        let schema = Schema([Meeting.self, TranscriptSegment.self, Bookmark.self, MeetingFolder.self])
 
         // Store data in Application Support to avoid sandbox collisions
         let appSupportURL = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
@@ -46,14 +48,34 @@ struct ClioApp: App {
                             }
                     }
                 } else {
-                    ContentView()
+                    ContentView(recordingVM: appRecordingVM)
                         .environment(services)
+                }
+            }
+            .onAppear {
+                // Create the shared recording VM once we have a model context
+                if appRecordingVM == nil {
+                    appRecordingVM = RecordingViewModel(services: services)
+                }
+                // Bind meeting detection panel at app level
+                if let vm = appRecordingVM {
+                    meetingDetectionPanel.bind(
+                        services: services,
+                        recordingVM: vm,
+                        modelContext: modelContainer.mainContext
+                    )
+                }
+                // Start calendar refresh
+                services.calendar.checkAuthorizationStatus()
+                if services.calendar.isAuthorized {
+                    services.calendar.refreshUpcomingMeetings()
+                    services.calendar.startRefreshTimer()
                 }
             }
         }
         .modelContainer(modelContainer)
 
-        MenuBarExtra("Clio", systemImage: "mic.circle.fill") {
+        MenuBarExtra("Clio", image: "MenuBarIcon") {
             MenuBarView()
                 .environment(services)
         }

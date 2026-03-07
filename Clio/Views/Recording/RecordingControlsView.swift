@@ -6,16 +6,22 @@ struct RecordingControlsView: View {
 
     var body: some View {
         VStack(spacing: 16) {
-            // Audio source picker
+            // Audio source picker with descriptions
             Picker("Audio Source", selection: Binding(
                 get: { viewModel.audioSource },
                 set: { viewModel.audioSource = $0 }
             )) {
-                Text("System Audio").tag(AudioSource.systemAudio)
-                Text("Microphone").tag(AudioSource.microphone)
-                Text("Both").tag(AudioSource.both)
+                Label("Microphone", systemImage: "mic.fill").tag(AudioSource.microphone)
+                Label("System Audio", systemImage: "speaker.wave.2.fill").tag(AudioSource.systemAudio)
+                Label("Both", systemImage: "waveform").tag(AudioSource.both)
             }
             .pickerStyle(.segmented)
+            .disabled(viewModel.isRecording)
+
+            Text(audioSourceDescription)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .frame(maxWidth: .infinity, alignment: .leading)
 
             // Main record button
             HStack(spacing: 20) {
@@ -51,17 +57,37 @@ struct RecordingControlsView: View {
 
             // Status
             if viewModel.isRecording {
-                Text(viewModel.elapsedTime.durationFormatted)
-                    .font(.system(.title2, design: .monospaced))
-                    .foregroundStyle(.secondary)
+                VStack(spacing: 4) {
+                    Text(viewModel.elapsedTime.durationFormatted)
+                        .font(.system(.title2, design: .monospaced))
+                        .foregroundStyle(.secondary)
+
+                    if let status = viewModel.transcriptionStatus {
+                        Text(status)
+                            .font(.caption)
+                            .foregroundStyle(.tertiary)
+                    }
+                }
             }
 
             if let error = viewModel.errorMessage {
                 Text(error)
                     .font(.caption)
                     .foregroundStyle(.red)
+                    .multilineTextAlignment(.center)
             }
         }
         .padding()
+    }
+
+    private var audioSourceDescription: String {
+        switch viewModel.audioSource {
+        case .microphone:
+            "Records your voice through the selected microphone."
+        case .systemAudio:
+            "Records audio from other apps (Zoom, Teams, etc.). Requires Screen Recording permission."
+        case .both:
+            "Records your mic + system audio. Best for remote meetings."
+        }
     }
 }

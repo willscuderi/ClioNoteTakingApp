@@ -41,18 +41,39 @@ final class OnboardingViewModel {
 
     var micPermissionGranted = false
     var screenRecordingGranted = false
+    var screenRecordingNeedsRestart = false
+    private var permissionPollTimer: Timer?
 
     func checkPermissions() {
         micPermissionGranted = AVCaptureDevice.authorizationStatus(for: .audio) == .authorized
-        // Screen recording can't be queried directly; we check if SCShareableContent works
+        checkScreenRecording()
+    }
+
+    private func checkScreenRecording() {
         Task {
             do {
-                _ = try await SCShareableContent.current
-                screenRecordingGranted = true
+                let content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: false)
+                // If we get content with displays, permission is granted
+                screenRecordingGranted = !content.displays.isEmpty
             } catch {
                 screenRecordingGranted = false
             }
         }
+    }
+
+    /// Start polling permissions every 2 seconds (call when permissions step is visible)
+    func startPermissionPolling() {
+        stopPermissionPolling()
+        permissionPollTimer = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: true) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                self?.checkPermissions()
+            }
+        }
+    }
+
+    func stopPermissionPolling() {
+        permissionPollTimer?.invalidate()
+        permissionPollTimer = nil
     }
 
     func requestMicPermission() {
@@ -64,14 +85,14 @@ final class OnboardingViewModel {
     }
 
     func requestScreenRecording() {
-        // ScreenCaptureKit triggers the TCC prompt on first use
         Task {
             do {
-                _ = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: false)
-                screenRecordingGranted = true
+                let content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: false)
+                screenRecordingGranted = !content.displays.isEmpty
             } catch {
                 screenRecordingGranted = false
-                // Open System Settings to Screen Recording pane
+                screenRecordingNeedsRestart = true
+                // Open System Settings to Screen & System Audio Recording pane
                 if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture") {
                     NSWorkspace.shared.open(url)
                 }
@@ -189,10 +210,25 @@ final class OnboardingViewModel {
 
     // MARK: - Step 4: Integrations
 
+    var calendarAccessGranted = false
     var enabledExports: Set<ExportFormat> = []
     var notionToken = ""
     var obsidianVaultPath: URL?
     var markdownFolderPath: URL?
+
+    func requestCalendarAccess() {
+        Task {
+            let calendarService = CalendarService()
+            calendarAccessGranted = await calendarService.requestAccess()
+            UserDefaults.standard.set(calendarAccessGranted, forKey: "calendarAccessGranted")
+        }
+    }
+
+    func checkCalendarAccess() {
+        let calendarService = CalendarService()
+        calendarService.checkAuthorizationStatus()
+        calendarAccessGranted = calendarService.isAuthorized
+    }
 
     func toggleExport(_ format: ExportFormat) {
         if enabledExports.contains(format) {

@@ -8,6 +8,10 @@
 	<string>Clio needs screen recording permission to capture system audio from meetings.</string>
 	<key>NSAppleEventsUsageDescription</key>
 	<string>Clio needs automation access to export notes to Apple Notes.</string>
+	<key>NSCalendarsUsageDescription</key>
+	<string>Clio reads your calendar to know when meetings start so it can automatically offer to record them.</string>
+	<key>NSCalendarsFullAccessUsageDescription</key>
+	<string>Clio reads your calendar to know when meetings start so it can automatically offer to record them.</string>
 	<key>NSAppTransportSecurity</key>
 	<dict>
 		<key>NSAllowsArbitraryLoads</key>

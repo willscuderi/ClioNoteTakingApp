@@ -1,4 +1,5 @@
 import AVFoundation
+import CoreAudio
 import Combine
 import os
 
@@ -8,9 +9,13 @@ final class AudioCaptureCoordinator: AudioCaptureServiceProtocol {
     private let logger = Logger(subsystem: "com.willscuderi.Clio", category: "AudioCoord")
 
     private let systemAudio = SystemAudioCaptureService()
-    private let microphone = MicrophoneCaptureService()
+    let microphone = MicrophoneCaptureService()
     private let mixer = AudioMixer()
     let bufferManager = AudioBufferManager(chunkDurationSeconds: 10.0)
+
+    /// Separate per-channel buffer managers for speaker separation in "Both" mode
+    let micBufferManager = AudioBufferManager(chunkDurationSeconds: 10.0)
+    let systemBufferManager = AudioBufferManager(chunkDurationSeconds: 10.0)
 
     private var activeSource: AudioSource?
 
@@ -68,8 +73,14 @@ final class AudioCaptureCoordinator: AudioCaptureServiceProtocol {
             source: source
         )
 
-        // Connect buffer manager to mixer output
+        // Connect buffer manager to mixer output (used for single-source modes)
         bufferManager.connect(to: mixer.outputPublisher)
+
+        // In "Both" mode, also connect per-channel buffer managers for speaker separation
+        if source == .both {
+            micBufferManager.connect(to: microphone.audioBufferPublisher)
+            systemBufferManager.connect(to: systemAudio.audioBufferPublisher)
+        }
 
         logger.info("Audio capture coordinator started with source: \(source.rawValue)")
     }
@@ -78,6 +89,10 @@ final class AudioCaptureCoordinator: AudioCaptureServiceProtocol {
         // Flush remaining audio
         bufferManager.flush()
         bufferManager.disconnect()
+        micBufferManager.flush()
+        micBufferManager.disconnect()
+        systemBufferManager.flush()
+        systemBufferManager.disconnect()
         mixer.disconnect()
 
         if systemAudio.isCapturing {

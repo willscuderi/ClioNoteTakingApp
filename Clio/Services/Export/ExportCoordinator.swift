@@ -24,6 +24,18 @@ final class ExportCoordinator: ExportServiceProtocol {
     }
 
     func exportToNotion(meeting: Meeting, apiKey: String) async throws {
-        try await notion.export(meeting: meeting)
+        try await notion.export(meeting: meeting, apiKey: apiKey.isEmpty ? nil : apiKey)
+    }
+
+    func testNotionConnection(apiKey: String?) async -> (success: Bool, message: String) {
+        await notion.testConnection(apiKey: apiKey)
+    }
+
+    func autoSaveMeetingNotes(meeting: Meeting) {
+        markdown.autoSave(meeting: meeting)
+    }
+
+    func buildMarkdownContent(meeting: Meeting) -> String {
+        markdown.buildMarkdown(for: meeting)
     }
 }

@@ -6,10 +6,12 @@ import os
 final class SettingsViewModel {
     var openAIKey = ""
     var claudeKey = ""
+    var geminiKey = ""
+    var grokKey = ""
     var notionKey = ""
     var deepgramKey = ""
     var preferredTranscriptionSource: TranscriptionSource = .local
-    var preferredLLMProvider: LLMProvider = .openai
+    var preferredLLMProvider: LLMProvider = .ollama
     var errorMessage: String?
     var successMessage: String?
 
@@ -23,43 +25,97 @@ final class SettingsViewModel {
     func loadKeys() {
         openAIKey = (try? keychain.loadAPIKey(for: "openai")) ?? ""
         claudeKey = (try? keychain.loadAPIKey(for: "claude")) ?? ""
+        geminiKey = (try? keychain.loadAPIKey(for: "gemini")) ?? ""
+        grokKey = (try? keychain.loadAPIKey(for: "grok")) ?? ""
         notionKey = (try? keychain.loadAPIKey(for: "notion")) ?? ""
         deepgramKey = (try? keychain.loadAPIKey(for: "deepgram")) ?? ""
     }
 
+    /// Save a single key immediately when it changes.
+    func saveKey(_ value: String, for provider: String) {
+        do {
+            if !value.isEmpty {
+                try keychain.saveAPIKey(value, for: provider)
+                logger.info("Saved \(provider) API key")
+                showSuccess("Saved \(provider) key")
+            }
+            // Don't auto-delete on empty — that's what deleteKey is for
+        } catch {
+            errorMessage = error.localizedDescription
+            logger.error("Failed to save \(provider) key: \(error.localizedDescription)")
+        }
+    }
+
+    /// Delete a specific API key.
+    func deleteKey(for provider: String) {
+        do {
+            try keychain.delete(key: "apikey.\(provider)")
+            // Clear the local property
+            switch provider {
+            case "openai": openAIKey = ""
+            case "claude": claudeKey = ""
+            case "gemini": geminiKey = ""
+            case "grok": grokKey = ""
+            case "notion": notionKey = ""
+            case "deepgram": deepgramKey = ""
+            default: break
+            }
+            showSuccess("Removed \(provider) key")
+            logger.info("Deleted \(provider) API key")
+        } catch {
+            // If key doesn't exist, that's fine
+            switch provider {
+            case "openai": openAIKey = ""
+            case "claude": claudeKey = ""
+            case "gemini": geminiKey = ""
+            case "grok": grokKey = ""
+            case "notion": notionKey = ""
+            case "deepgram": deepgramKey = ""
+            default: break
+            }
+        }
+    }
+
+    /// Legacy bulk save — kept for compatibility but no longer the primary path.
     func saveKeys() {
         do {
-            if !openAIKey.isEmpty {
-                try keychain.saveAPIKey(openAIKey, for: "openai")
-            } else {
-                try keychain.delete(key: "apikey.openai")
-            }
-
-            if !claudeKey.isEmpty {
-                try keychain.saveAPIKey(claudeKey, for: "claude")
-            } else {
-                try keychain.delete(key: "apikey.claude")
-            }
-
-            if !notionKey.isEmpty {
-                try keychain.saveAPIKey(notionKey, for: "notion")
-            } else {
-                try keychain.delete(key: "apikey.notion")
-            }
-
-            if !deepgramKey.isEmpty {
-                try keychain.saveAPIKey(deepgramKey, for: "deepgram")
-            } else {
-                try keychain.delete(key: "apikey.deepgram")
-            }
+            saveOrDelete(openAIKey, for: "openai")
+            saveOrDelete(claudeKey, for: "claude")
+            saveOrDelete(geminiKey, for: "gemini")
+            saveOrDelete(grokKey, for: "grok")
+            saveOrDelete(notionKey, for: "notion")
+            saveOrDelete(deepgramKey, for: "deepgram")
 
             errorMessage = nil
-            successMessage = "API keys saved successfully"
+            successMessage = "All API keys saved"
             logger.info("API keys saved")
         } catch {
             errorMessage = error.localizedDescription
             successMessage = nil
             logger.error("Failed to save API keys: \(error.localizedDescription)")
+        }
+    }
+
+    private func saveOrDelete(_ value: String, for provider: String) {
+        do {
+            if !value.isEmpty {
+                try keychain.saveAPIKey(value, for: provider)
+            } else {
+                try keychain.delete(key: "apikey.\(provider)")
+            }
+        } catch {
+            logger.warning("Key operation for \(provider) failed: \(error.localizedDescription)")
+        }
+    }
+
+    private func showSuccess(_ message: String) {
+        successMessage = message
+        // Auto-clear after 3 seconds
+        Task {
+            try? await Task.sleep(for: .seconds(3))
+            if successMessage == message {
+                successMessage = nil
+            }
         }
     }
 }

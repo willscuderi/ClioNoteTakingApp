@@ -50,6 +50,31 @@ struct MenuBarView: View {
                     Text("Clio")
                         .font(.headline)
 
+                    // Meeting app detected prompt
+                    if services.meetingDetector.shouldPromptRecording,
+                       let appName = services.meetingDetector.detectedMeetingApp {
+                        MeetingDetectedBanner(
+                            appName: appName,
+                            onRecord: {
+                                Task { await recordingVM.startRecording(context: modelContext) }
+                                services.meetingDetector.dismissPrompt()
+                            },
+                            onDismiss: {
+                                services.meetingDetector.dismissPrompt()
+                            }
+                        )
+                    }
+
+                    // Upcoming meeting from calendar
+                    if let next = services.calendar.nextMeeting {
+                        UpcomingMeetingRow(
+                            meeting: next,
+                            onRecord: {
+                                Task { await recordingVM.startRecording(context: modelContext) }
+                            }
+                        )
+                    }
+
                     Divider()
 
                     Button {
@@ -57,6 +82,14 @@ struct MenuBarView: View {
                     } label: {
                         Label("Start Recording", systemImage: "record.circle")
                     }
+                }
+
+                if let error = recordingVM.errorMessage {
+                    Text(error)
+                        .font(.caption2)
+                        .foregroundStyle(.red)
+                        .lineLimit(3)
+                        .padding(.horizontal, 4)
                 }
             }
 
@@ -75,9 +108,81 @@ struct MenuBarView: View {
             .keyboardShortcut("q")
         }
         .padding(8)
-        .frame(width: 220)
+        .frame(width: 240)
         .onAppear {
             recordingVM = RecordingViewModel(services: services)
         }
+    }
+}
+
+// MARK: - Meeting Detected Banner
+
+struct MeetingDetectedBanner: View {
+    let appName: String
+    let onRecord: () -> Void
+    let onDismiss: () -> Void
+
+    var body: some View {
+        VStack(spacing: 6) {
+            HStack(spacing: 6) {
+                Image(systemName: "video.fill")
+                    .foregroundStyle(Color.accentColor)
+                    .font(.caption)
+                Text("\(appName) detected")
+                    .font(.caption.weight(.medium))
+                Spacer()
+                Button(action: onDismiss) {
+                    Image(systemName: "xmark")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+                .buttonStyle(.plain)
+            }
+
+            Button(action: onRecord) {
+                Label("Start Recording", systemImage: "record.circle")
+                    .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.borderedProminent)
+            .controlSize(.small)
+        }
+        .padding(8)
+        .background(RoundedRectangle(cornerRadius: 8).fill(Color.accentColor.opacity(0.08)))
+    }
+}
+
+// MARK: - Upcoming Meeting Row
+
+struct UpcomingMeetingRow: View {
+    let meeting: CalendarMeeting
+    let onRecord: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(spacing: 6) {
+                Circle()
+                    .fill(meeting.isInProgress ? .green : (meeting.isStartingSoon ? .orange : .secondary))
+                    .frame(width: 6, height: 6)
+                Text(meeting.title)
+                    .font(.caption.weight(.medium))
+                    .lineLimit(1)
+            }
+
+            HStack {
+                Text(meeting.formattedTime)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+
+                Spacer()
+
+                if meeting.isStartingSoon || meeting.isInProgress {
+                    Button("Record", action: onRecord)
+                        .buttonStyle(.bordered)
+                        .controlSize(.mini)
+                }
+            }
+        }
+        .padding(.horizontal, 4)
+        .padding(.vertical, 4)
     }
 }

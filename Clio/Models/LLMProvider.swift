@@ -66,4 +66,64 @@ enum LLMProvider: String, Codable, CaseIterable, Identifiable {
         case .ollama: nil
         }
     }
+
+    var setupSteps: [String] {
+        switch self {
+        case .openai:
+            [
+                "Click the link below to open OpenAI's API key page",
+                "Sign in or create a free account",
+                "Click \"Create new secret key\"",
+                "Copy the key and paste it here"
+            ]
+        case .claude:
+            [
+                "Click the link below to open Anthropic's console",
+                "Sign in or create a free account",
+                "Click \"Create Key\"",
+                "Copy the key and paste it here"
+            ]
+        case .gemini:
+            [
+                "Click the link below to open Google AI Studio",
+                "Sign in with your Google account",
+                "Click \"Create API Key\"",
+                "Copy the key and paste it here"
+            ]
+        case .grok:
+            [
+                "Click the link below to open the xAI console",
+                "Sign in or create an account",
+                "Generate a new API key",
+                "Copy the key and paste it here"
+            ]
+        case .ollama:
+            [
+                "Download Ollama from ollama.com",
+                "Open Ollama — it runs in your menu bar",
+                "Run: ollama pull llama3.2",
+                "That's it! No API key needed"
+            ]
+        }
+    }
+
+    var signupURL: URL? {
+        switch self {
+        case .openai: URL(string: "https://platform.openai.com/signup")
+        case .claude: URL(string: "https://console.anthropic.com/")
+        case .gemini: URL(string: "https://aistudio.google.com/")
+        case .grok: URL(string: "https://console.x.ai/")
+        case .ollama: URL(string: "https://ollama.com/download")
+        }
+    }
+
+    var getLinkLabel: String {
+        switch self {
+        case .openai: "Open OpenAI API Keys"
+        case .claude: "Open Anthropic Console"
+        case .gemini: "Open Google AI Studio"
+        case .grok: "Open xAI Console"
+        case .ollama: "Download Ollama"
+        }
+    }
 }

@@ -1,27 +1,27 @@
 import Foundation
 import os
 
-final class ClaudeService: LLMServiceProtocol {
-    private let logger = Logger(subsystem: "com.willscuderi.Clio", category: "Claude")
+final class GeminiService: LLMServiceProtocol {
+    private let logger = Logger(subsystem: "com.willscuderi.Clio", category: "Gemini")
     private let keychain: KeychainServiceProtocol
-    private let apiURL = URL(string: "https://api.anthropic.com/v1/messages")!
+    private let baseURL = "https://generativelanguage.googleapis.com/v1beta/models"
 
     init(keychain: KeychainServiceProtocol) {
         self.keychain = keychain
     }
 
     func summarize(transcript: String, provider: LLMProvider, model: LLMModel? = nil) async throws -> String {
-        guard provider == .claude else {
+        guard provider == .gemini else {
             throw LLMError.providerMismatch
         }
 
-        guard let apiKey = try keychain.loadAPIKey(for: "claude") else {
+        guard let apiKey = try keychain.loadAPIKey(for: "gemini") else {
             throw LLMError.notConfigured
         }
 
         let modelID = model?.id ?? provider.defaultModel.id
 
-        let systemPrompt = """
+        let systemInstruction = """
         You are a meeting note assistant. Given a meeting transcript, produce a clear, concise summary in Markdown format. Include:
 
         ## Meeting Summary
@@ -41,27 +41,33 @@ final class ClaudeService: LLMServiceProtocol {
         The transcript may include speaker labels like [You] and [Remote]. [You] is the person who recorded the meeting (the local user). [Remote] is audio from the other side of a call — it may contain multiple people. When speaker labels are present, attribute statements and action items to the correct speaker. If you can distinguish multiple remote participants by context or conversational cues, label them (e.g., "Remote Speaker 1", "Remote Speaker 2"). If unsure, use "Remote" as a group label.
         """
 
-        // Truncate transcript if too long
-        let truncatedTranscript = String(transcript.prefix(80000))
+        // Truncate transcript if too long (Gemini supports large contexts but cap reasonably)
+        let truncatedTranscript = String(transcript.prefix(100000))
 
         let requestBody: [String: Any] = [
-            "model": modelID,
-            "max_tokens": 2000,
-            "system": systemPrompt,
-            "messages": [
-                ["role": "user", "content": "Please summarize this meeting transcript:\n\n\(truncatedTranscript)"]
+            "system_instruction": [
+                "parts": [["text": systemInstruction]]
+            ],
+            "contents": [
+                [
+                    "parts": [["text": "Please summarize this meeting transcript:\n\n\(truncatedTranscript)"]]
+                ]
+            ],
+            "generationConfig": [
+                "temperature": 0.3,
+                "maxOutputTokens": 2000
             ]
         ]
 
-        var request = URLRequest(url: apiURL)
+        let url = URL(string: "\(baseURL)/\(modelID):generateContent")!
+        var request = URLRequest(url: url)
         request.httpMethod = "POST"
-        request.setValue(apiKey, forHTTPHeaderField: "x-api-key")
-        request.setValue("2023-06-01", forHTTPHeaderField: "anthropic-version")
+        request.setValue(apiKey, forHTTPHeaderField: "x-goog-api-key")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.timeoutInterval = 120
         request.httpBody = try JSONSerialization.data(withJSONObject: requestBody)
 
-        logger.info("Sending transcript to Claude (\(truncatedTranscript.count) chars)")
+        logger.info("Sending transcript to Gemini \(modelID) (\(truncatedTranscript.count) chars)")
 
         let (data, response) = try await URLSession.shared.data(for: request)
 
@@ -71,33 +77,40 @@ final class ClaudeService: LLMServiceProtocol {
 
         guard httpResponse.statusCode == 200 else {
             let errorBody = String(data: data, encoding: .utf8) ?? "Unknown error"
-            logger.error("Claude API error \(httpResponse.statusCode): \(errorBody)")
+            logger.error("Gemini API error \(httpResponse.statusCode): \(errorBody)")
             throw LLMError.from(statusCode: httpResponse.statusCode, body: errorBody)
         }
 
-        let result = try JSONDecoder().decode(ClaudeResponse.self, from: data)
+        let result = try JSONDecoder().decode(GeminiResponse.self, from: data)
 
-        guard let textBlock = result.content.first(where: { $0.type == "text" }) else {
-            throw LLMError.apiError("No text content in response")
+        guard let text = result.candidates?.first?.content?.parts?.first?.text else {
+            throw LLMError.apiError("No text content in Gemini response")
         }
 
-        logger.info("Summary generated (\(textBlock.text.count) chars)")
-        return textBlock.text
+        logger.info("Summary generated (\(text.count) chars)")
+        return text
     }
 
     func isConfigured(provider: LLMProvider) -> Bool {
-        guard provider == .claude else { return false }
-        return (try? keychain.loadAPIKey(for: "claude")) != nil
+        guard provider == .gemini else { return false }
+        return (try? keychain.loadAPIKey(for: "gemini")) != nil
     }
 }
 
 // MARK: - Response Models
 
-private struct ClaudeResponse: Decodable {
-    let content: [ContentBlock]
+private struct GeminiResponse: Decodable {
+    let candidates: [Candidate]?
 
-    struct ContentBlock: Decodable {
-        let type: String
-        let text: String
+    struct Candidate: Decodable {
+        let content: Content?
+    }
+
+    struct Content: Decodable {
+        let parts: [Part]?
+    }
+
+    struct Part: Decodable {
+        let text: String?
     }
 }

@@ -32,6 +32,7 @@ targets:
       - sdk: Accelerate.framework
       - sdk: Metal.framework
       - sdk: MetalKit.framework
+      - sdk: EventKit.framework
       - sdk: libc++.tbd
     settings:
       base:

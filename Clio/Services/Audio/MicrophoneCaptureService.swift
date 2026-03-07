@@ -1,5 +1,6 @@
 import AVFoundation
 import Combine
+import CoreAudio
 import os
 
 final class MicrophoneCaptureService: AudioCaptureServiceProtocol {
@@ -13,6 +14,9 @@ final class MicrophoneCaptureService: AudioCaptureServiceProtocol {
     /// Target format: 16kHz mono Float32 (Whisper's native format)
     private let targetSampleRate: Double = 16000
     private let targetChannels: AVAudioChannelCount = 1
+
+    /// Optional: specific device ID to use instead of system default.
+    var deviceID: AudioDeviceID?
 
     var audioBufferPublisher: AnyPublisher<AVAudioPCMBuffer, Never> {
         bufferSubject.eraseToAnyPublisher()
@@ -30,12 +34,37 @@ final class MicrophoneCaptureService: AudioCaptureServiceProtocol {
         guard !isCapturing else { return }
 
         let engine = AVAudioEngine()
+
+        // Set specific input device if requested
+        if let deviceID {
+            let inputNode = engine.inputNode
+            guard let audioUnit = inputNode.audioUnit else {
+                throw AudioCaptureError.noInputDevice
+            }
+            var devID = deviceID
+            let status = AudioUnitSetProperty(
+                audioUnit,
+                kAudioOutputUnitProperty_CurrentDevice,
+                kAudioUnitScope_Global,
+                0,
+                &devID,
+                UInt32(MemoryLayout<AudioDeviceID>.size)
+            )
+            if status != noErr {
+                logger.warning("Failed to set input device \(deviceID), using default. Error: \(status)")
+            } else {
+                logger.info("Set input device to ID: \(deviceID)")
+            }
+        }
+
         let inputNode = engine.inputNode
         let inputFormat = inputNode.outputFormat(forBus: 0)
 
         guard inputFormat.sampleRate > 0 else {
             throw AudioCaptureError.noInputDevice
         }
+
+        logger.info("Input device format: \(inputFormat.sampleRate)Hz, \(inputFormat.channelCount) channels")
 
         // Create target format for Whisper (16kHz mono)
         guard let targetFormat = AVAudioFormat(

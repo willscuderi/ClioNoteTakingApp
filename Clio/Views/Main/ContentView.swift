@@ -2,48 +2,64 @@ import SwiftUI
 import SwiftData
 
 struct ContentView: View {
+    /// Shared RecordingViewModel passed from ClioApp. Falls back to creating its own.
+    var recordingVM: RecordingViewModel?
+
     @Environment(ServiceContainer.self) private var services
     @Environment(\.modelContext) private var modelContext
     @State private var listVM = MeetingListViewModel()
-    @State private var recordingVM: RecordingViewModel?
+    @State private var localRecordingVM: RecordingViewModel?
     @State private var detailVM: MeetingDetailViewModel?
     @State private var transcriptVM: TranscriptViewModel?
     @State private var selectedMeeting: Meeting?
-    @State private var columnVisibility = NavigationSplitViewVisibility.all
+    @State private var panelController = RecordingPanelController()
+
+    /// Use the shared VM if provided, otherwise the locally-created one.
+    private var activeRecordingVM: RecordingViewModel? {
+        recordingVM ?? localRecordingVM
+    }
 
     var body: some View {
-        NavigationSplitView(columnVisibility: $columnVisibility) {
+        NavigationSplitView {
             SidebarView(
                 viewModel: listVM,
-                selectedMeeting: $selectedMeeting
+                selectedMeeting: $selectedMeeting,
+                detailVM: detailVM,
+                recordingVM: activeRecordingVM
             )
-        } content: {
-            if let meeting = selectedMeeting, let detailVM {
-                MeetingDetailView(meeting: meeting, viewModel: detailVM)
-            } else {
-                EmptyMeetingView(recordingVM: recordingVM)
-            }
         } detail: {
-            if let meeting = selectedMeeting, let transcriptVM {
-                TranscriptPaneView(meeting: meeting, viewModel: transcriptVM)
+            if let meeting = selectedMeeting, let detailVM, let transcriptVM {
+                MeetingContentView(
+                    meeting: meeting,
+                    detailVM: detailVM,
+                    transcriptVM: transcriptVM
+                )
             } else {
-                Text("Select a meeting to view its transcript")
-                    .foregroundStyle(.secondary)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                EmptyMeetingView(recordingVM: activeRecordingVM)
             }
         }
-        .frame(minWidth: 900, minHeight: 600)
+        .frame(minWidth: 750, minHeight: 600)
         .toolbar {
             ToolbarItemGroup(placement: .primaryAction) {
-                if let recordingVM {
-                    RecordingToolbarView(viewModel: recordingVM)
+                if let vm = activeRecordingVM {
+                    RecordingToolbarView(viewModel: vm)
                 }
             }
         }
         .onAppear {
-            recordingVM = RecordingViewModel(services: services)
+            if recordingVM == nil {
+                localRecordingVM = RecordingViewModel(services: services)
+            }
             detailVM = MeetingDetailViewModel(services: services)
             transcriptVM = TranscriptViewModel(services: services)
+        }
+        .onChange(of: activeRecordingVM?.isRecording) { _, isRecording in
+            guard let vm = activeRecordingVM else { return }
+            if isRecording == true {
+                panelController.show(recordingVM: vm, modelContext: modelContext)
+            } else {
+                panelController.hide()
+            }
         }
     }
 }
@@ -53,24 +69,37 @@ struct EmptyMeetingView: View {
     @Environment(\.modelContext) private var modelContext
 
     var body: some View {
-        VStack(spacing: 16) {
+        VStack(spacing: 20) {
             Image(systemName: "waveform.circle")
-                .font(.system(size: 64))
-                .foregroundStyle(.secondary)
+                .font(.system(size: 72))
+                .foregroundStyle(.quaternary)
             Text("No Meeting Selected")
-                .font(.title2)
+                .font(.system(size: 22, weight: .semibold))
                 .foregroundStyle(.secondary)
             Text("Select a meeting from the sidebar or start a new recording.")
+                .font(.system(size: 15))
                 .foregroundStyle(.tertiary)
 
             if let recordingVM, !recordingVM.isRecording {
-                Button("Start Recording") {
+                Button {
                     Task {
                         await recordingVM.startRecording(context: modelContext)
                     }
+                } label: {
+                    Label("Start Recording", systemImage: "record.circle")
+                        .font(.system(size: 15, weight: .medium))
                 }
                 .buttonStyle(.borderedProminent)
                 .controlSize(.large)
+
+                if let error = recordingVM.errorMessage {
+                    Text(error)
+                        .font(.system(size: 13))
+                        .foregroundStyle(.red)
+                        .multilineTextAlignment(.center)
+                        .frame(maxWidth: 420)
+                        .padding(.top, 4)
+                }
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -92,6 +121,12 @@ struct RecordingToolbarView: View {
                     .monospacedDigit()
                     .foregroundStyle(.secondary)
 
+                if let status = viewModel.transcriptionStatus {
+                    Text(status)
+                        .font(.caption)
+                        .foregroundStyle(.tertiary)
+                }
+
                 Button {
                     Task { await viewModel.togglePause() }
                 } label: {
@@ -112,7 +147,24 @@ struct RecordingToolbarView: View {
                 }
                 .help("Add bookmark")
             }
+        } else if viewModel.isPostProcessing {
+            HStack(spacing: 8) {
+                ProgressView()
+                    .controlSize(.small)
+                if let status = viewModel.postProcessingStatus {
+                    Text(status)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
         } else {
+            if let error = viewModel.errorMessage {
+                Text(error)
+                    .font(.caption)
+                    .foregroundStyle(.red)
+                    .lineLimit(2)
+            }
+
             Button {
                 Task { await viewModel.startRecording(context: modelContext) }
             } label: {

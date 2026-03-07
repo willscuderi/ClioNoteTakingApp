@@ -20,6 +20,8 @@ final class Meeting {
     @Relationship(deleteRule: .cascade, inverse: \Bookmark.meeting)
     var bookmarks: [Bookmark]
 
+    var folder: MeetingFolder?
+
     init(
         id: UUID = UUID(),
         title: String = "New Meeting",
@@ -48,7 +50,12 @@ final class Meeting {
     var fullTranscript: String {
         segments
             .sorted { $0.startTime < $1.startTime }
-            .map(\.text)
-            .joined(separator: " ")
+            .map { segment in
+                if let speaker = segment.speakerLabel {
+                    return "[\(speaker)] \(segment.text)"
+                }
+                return segment.text
+            }
+            .joined(separator: "\n")
     }
 }
