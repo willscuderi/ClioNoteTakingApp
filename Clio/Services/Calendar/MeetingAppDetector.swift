@@ -15,13 +15,22 @@ final class MeetingAppDetector {
 
     // MARK: - Known Apps
 
-    /// Dedicated meeting apps (not browsers)
+    /// Apps that use voice/video calls. Only triggers when frontmost + mic active.
     private static let dedicatedMeetingApps: [String: String] = [
+        // Video conferencing
         "us.zoom.xos": "Zoom",
         "com.microsoft.teams": "Microsoft Teams",
         "com.microsoft.teams2": "Microsoft Teams",
         "com.cisco.webexmeetingsapp": "Webex",
-        "com.logmeininc.GoToMeeting": "GoToMeeting"
+        "com.logmeininc.GoToMeeting": "GoToMeeting",
+        // Communication apps with calling
+        "com.tinyspeck.slackmacgap": "Slack",
+        "com.hnc.Discord": "Discord",
+        "com.apple.FaceTime": "FaceTime",
+        "com.skype.skype": "Skype",
+        "net.whatsapp.WhatsApp": "WhatsApp",
+        "ru.keepcoder.Telegram": "Telegram",
+        "com.ringcentral.glip": "RingCentral",
     ]
 
     /// Browsers that could be running Google Meet, Zoom Web, etc.
@@ -59,6 +68,9 @@ final class MeetingAppDetector {
 
     /// Debounce task for mic activation
     private var micCheckTask: Task<Void, Never>?
+
+    /// Tracks the frontmost app when the mic first activated (before debounce)
+    private var frontmostAppAtMicActivation: String?
 
     // MARK: - Start / Stop
 
@@ -240,6 +252,7 @@ final class MeetingAppDetector {
             }
             // Reset dismissed state so the NEXT meeting triggers a new prompt
             dismissedPromptForApp = nil
+            frontmostAppAtMicActivation = nil
 
             logger.info("Mic became inactive — resetting meeting detection")
         }
@@ -248,6 +261,9 @@ final class MeetingAppDetector {
     private func handleMicBecameActive() {
         // Don't prompt if Clio is already recording
         guard !isRecordingInClio else { return }
+
+        // Snapshot the frontmost app right now (before debounce delay)
+        frontmostAppAtMicActivation = NSWorkspace.shared.frontmostApplication?.bundleIdentifier
 
         // Debounce: wait 3 seconds to confirm mic is sustained (not a brief blip)
         micCheckTask?.cancel()
@@ -264,36 +280,42 @@ final class MeetingAppDetector {
 
     // MARK: - Meeting Detection
 
+    /// Only prompts when the **frontmost app** is a meeting app or browser.
+    ///
+    /// This avoids false positives from apps like Wispr Flow or Siri activating
+    /// the mic while Teams/Zoom happen to be running in the background.
+    /// We check both the frontmost app at the moment the mic activated AND
+    /// the current frontmost app (in case the user switched away briefly).
     private func detectActiveMeeting() {
-        let running = NSWorkspace.shared.runningApplications
+        let currentFrontmost = NSWorkspace.shared.frontmostApplication?.bundleIdentifier
+        let candidates = Set([frontmostAppAtMicActivation, currentFrontmost].compactMap { $0 })
 
-        // 1. Check dedicated meeting apps first
-        for app in running {
-            guard let bundleID = app.bundleIdentifier,
-                  let appName = Self.dedicatedMeetingApps[bundleID] else { continue }
+        // 1. Check if the frontmost app (now or when mic activated) is a dedicated meeting app
+        for bundleID in candidates {
+            if let appName = Self.dedicatedMeetingApps[bundleID] {
+                guard dismissedPromptForApp != appName else { continue }
 
-            guard dismissedPromptForApp != appName else { continue }
-
-            detectedMeetingApp = appName
-            shouldPromptRecording = true
-            logger.info("Meeting detected: \(appName) (mic active)")
-            return
+                detectedMeetingApp = appName
+                shouldPromptRecording = true
+                logger.info("Meeting detected: \(appName) is frontmost with mic active")
+                return
+            }
         }
 
-        // 2. Check if frontmost app is a browser (could be Google Meet, Zoom Web, etc.)
-        if let frontApp = NSWorkspace.shared.frontmostApplication,
-           let bundleID = frontApp.bundleIdentifier,
-           Self.browserBundleIDs.contains(bundleID) {
-            let appName = "Video call"
-            guard dismissedPromptForApp != appName else { return }
+        // 2. Check if the frontmost app is a browser (Google Meet, Zoom Web, etc.)
+        for bundleID in candidates {
+            if Self.browserBundleIDs.contains(bundleID) {
+                let appName = "Video call"
+                guard dismissedPromptForApp != appName else { return }
 
-            detectedMeetingApp = appName
-            shouldPromptRecording = true
-            logger.info("Browser-based meeting detected: \(bundleID) (mic active)")
-            return
+                detectedMeetingApp = appName
+                shouldPromptRecording = true
+                logger.info("Browser-based meeting detected: \(bundleID) is frontmost with mic active")
+                return
+            }
         }
 
-        logger.info("Mic active but no meeting app detected — ignoring")
+        logger.info("Mic active but frontmost app is not a meeting app — ignoring")
     }
 
     // MARK: - CoreAudio Helpers

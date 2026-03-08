@@ -13,6 +13,7 @@ final class ServiceContainer {
     let calendar: CalendarService
     let meetingDetector: MeetingAppDetector
     let audioDevices: AudioDeviceManager
+    let backup: BackupService
 
     init(
         audioCapture: AudioCaptureServiceProtocol,
@@ -23,7 +24,8 @@ final class ServiceContainer {
         hotkey: HotkeyServiceProtocol,
         calendar: CalendarService,
         meetingDetector: MeetingAppDetector,
-        audioDevices: AudioDeviceManager
+        audioDevices: AudioDeviceManager,
+        backup: BackupService
     ) {
         self.audioCapture = audioCapture
         self.transcription = transcription
@@ -34,6 +36,7 @@ final class ServiceContainer {
         self.calendar = calendar
         self.meetingDetector = meetingDetector
         self.audioDevices = audioDevices
+        self.backup = backup
     }
 
     static func makeDefault() -> ServiceContainer {
@@ -59,7 +62,8 @@ final class ServiceContainer {
             hotkey: HotkeyService(),
             calendar: CalendarService(),
             meetingDetector: MeetingAppDetector(),
-            audioDevices: audioDevices
+            audioDevices: audioDevices,
+            backup: BackupService()
         )
     }
 }

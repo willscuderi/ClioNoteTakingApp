@@ -16,7 +16,9 @@ final class NotionExportService {
 
     // MARK: - Public API
 
-    func export(meeting: Meeting, apiKey: String? = nil) async throws {
+    /// Exports a meeting to Notion and returns the page URL.
+    @discardableResult
+    func export(meeting: Meeting, apiKey: String? = nil) async throws -> String {
         let key = try resolveAPIKey(override: apiKey)
         let databaseID = try await ensureDatabase(apiKey: key)
 
@@ -37,12 +39,18 @@ final class NotionExportService {
             throw translateNotionError(code: code, body: errorBody)
         }
 
-        // Parse the page ID so we can append content blocks
-        if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-           let pageID = json["id"] as? String {
-            try await appendContentBlocks(pageID: pageID, meeting: meeting, apiKey: key)
-            logger.info("Exported to Notion database: \(meeting.title)")
+        guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let pageID = json["id"] as? String else {
+            throw ExportError.networkError("Could not parse page ID from Notion response")
         }
+
+        // Extract the page URL
+        let pageURL = (json["url"] as? String) ?? "https://notion.so/\(pageID.replacingOccurrences(of: "-", with: ""))"
+
+        try await appendContentBlocks(pageID: pageID, meeting: meeting, apiKey: key)
+        logger.info("Exported to Notion database: \(meeting.title) — \(pageURL)")
+
+        return pageURL
     }
 
     /// Test the Notion connection and return a status message.

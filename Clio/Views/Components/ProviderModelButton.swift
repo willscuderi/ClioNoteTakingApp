@@ -1,18 +1,25 @@
 import SwiftUI
 
 struct ProviderModelButton: View {
-    @Bindable var viewModel: MeetingDetailViewModel
+    @Binding var selectedProvider: LLMProvider
+    @Binding var selectedModelID: String
+
+    private var resolvedModel: LLMModel {
+        selectedProvider.availableModels.first(where: { $0.id == selectedModelID })
+            ?? selectedProvider.defaultModel
+    }
 
     var body: some View {
         Menu {
             Section("Provider") {
                 ForEach(LLMProvider.allCases) { provider in
                     Button {
-                        viewModel.selectedLLMProvider = provider
+                        selectedProvider = provider
+                        selectedModelID = provider.defaultModel.id
                     } label: {
                         HStack {
                             Label(provider.displayName, systemImage: provider.iconName)
-                            if provider == viewModel.selectedLLMProvider {
+                            if provider == selectedProvider {
                                 Image(systemName: "checkmark")
                             }
                         }
@@ -20,13 +27,13 @@ struct ProviderModelButton: View {
                 }
             }
             Section("Model") {
-                ForEach(viewModel.selectedLLMProvider.availableModels) { model in
+                ForEach(selectedProvider.availableModels) { model in
                     Button {
-                        viewModel.selectedModelID = model.id
+                        selectedModelID = model.id
                     } label: {
                         HStack {
                             Text("\(model.displayName) \(model.tierLabel)")
-                            if model.id == viewModel.selectedModelID {
+                            if model.id == selectedModelID {
                                 Image(systemName: "checkmark")
                             }
                         }
@@ -35,9 +42,9 @@ struct ProviderModelButton: View {
             }
         } label: {
             HStack(spacing: 4) {
-                Image(systemName: viewModel.selectedLLMProvider.iconName)
+                Image(systemName: selectedProvider.iconName)
                     .font(.system(size: 12))
-                Text(viewModel.resolvedModel.displayName)
+                Text(resolvedModel.displayName)
                     .font(.system(size: 13))
                 Image(systemName: "chevron.down")
                     .font(.system(size: 9))

@@ -160,6 +160,9 @@ final class RecordingViewModel {
                 // Auto-save markdown to local MeetingNotes folder
                 services.export.autoSaveMeetingNotes(meeting: meeting)
 
+                // Auto-backup to user-configured backup folder
+                services.backup.backupMeeting(meeting, export: services.export)
+
                 // Auto-generate summary if transcript is available
                 if !meeting.fullTranscript.isEmpty {
                     await autoGenerateSummary(for: meeting, context: context)

@@ -29,6 +29,33 @@ final class LLMCoordinator: LLMServiceProtocol {
         }
     }
 
+    func summarizeStreaming(transcript: String, provider: LLMProvider, model: LLMModel? = nil) -> AsyncThrowingStream<String, Error> {
+        let resolvedModel = model ?? provider.defaultModel
+        logger.info("Streaming summary with \(provider.rawValue) / \(resolvedModel.id)")
+        switch provider {
+        case .openai: return openAI.summarizeStreaming(transcript: transcript, provider: provider, model: resolvedModel)
+        case .claude: return claude.summarizeStreaming(transcript: transcript, provider: provider, model: resolvedModel)
+        case .gemini: return gemini.summarizeStreaming(transcript: transcript, provider: provider, model: resolvedModel)
+        case .ollama: return ollama.summarizeStreaming(transcript: transcript, provider: provider, model: resolvedModel)
+        case .grok:
+            return AsyncThrowingStream { $0.finish(throwing: LLMError.apiError("Grok is not yet supported")) }
+        }
+    }
+
+    func askQuestion(question: String, context: String, provider: LLMProvider, model: LLMModel? = nil) async throws -> String {
+        let resolvedModel = model ?? provider.defaultModel
+        logger.info("Asking question with \(provider.rawValue) / \(resolvedModel.id)")
+        switch provider {
+        case .openai: return try await openAI.askQuestion(question: question, context: context, provider: provider, model: resolvedModel)
+        case .claude: return try await claude.askQuestion(question: question, context: context, provider: provider, model: resolvedModel)
+        case .gemini: return try await gemini.askQuestion(question: question, context: context, provider: provider, model: resolvedModel)
+        case .ollama: return try await ollama.askQuestion(question: question, context: context, provider: provider, model: resolvedModel)
+        case .grok:
+            logger.warning("Grok not yet implemented")
+            throw LLMError.apiError("Grok is not yet supported")
+        }
+    }
+
     func isConfigured(provider: LLMProvider) -> Bool {
         switch provider {
         case .openai: openAI.isConfigured(provider: provider)

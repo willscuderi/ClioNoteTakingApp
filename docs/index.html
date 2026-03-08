@@ -1,0 +1,829 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Clio — Free AI Meeting Notes for Mac | Open Source</title>
+    <meta name="description" content="Clio is a free, open-source macOS app that records your meetings, transcribes them locally with whisper.cpp, and generates AI-powered summaries. Bring your own API key or go fully offline with Ollama. No subscription required.">
+    <meta name="keywords" content="free meeting transcription app mac, granola alternative free, open source meeting notes mac, offline meeting transcription mac, AI meeting notes, whisper.cpp, local transcription, macOS meeting app">
+    <meta name="author" content="Will Scuderi">
+    <meta name="robots" content="index, follow">
+    <link rel="canonical" href="https://willscuderi.github.io/ClioNoteTakingApp/">
+
+    <!-- Open Graph -->
+    <meta property="og:title" content="Clio — Free AI Meeting Notes for Mac">
+    <meta property="og:description" content="Open-source macOS app that transcribes meetings locally and generates AI summaries. Bring your own API key or go fully offline with Ollama. No subscription.">
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://willscuderi.github.io/ClioNoteTakingApp/">
+    <meta property="og:site_name" content="Clio">
+
+    <!-- Twitter Card -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Clio — Free AI Meeting Notes for Mac">
+    <meta name="twitter:description" content="Open-source macOS app that transcribes meetings locally and generates AI summaries. Bring your own API key or go fully offline with Ollama.">
+
+    <style>
+        *, *::before, *::after {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --blue: #007AFF;
+            --blue-hover: #0066D6;
+            --green: #34C759;
+            --orange: #FF9500;
+            --bg: #FFFFFF;
+            --bg-secondary: #F5F5F7;
+            --bg-tertiary: #FAFAFA;
+            --text-primary: #1D1D1F;
+            --text-secondary: #6E6E73;
+            --text-tertiary: #86868B;
+            --border: #E5E5EA;
+            --border-light: #F0F0F2;
+            --radius: 12px;
+            --radius-sm: 8px;
+            --max-width: 1080px;
+        }
+
+        html {
+            scroll-behavior: smooth;
+            -webkit-text-size-adjust: 100%;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'SF Pro Display', system-ui, sans-serif;
+            background: var(--bg);
+            color: var(--text-primary);
+            line-height: 1.5;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }
+
+        /* Navigation */
+        nav {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            z-index: 100;
+            background: rgba(255, 255, 255, 0.8);
+            backdrop-filter: saturate(180%) blur(20px);
+            -webkit-backdrop-filter: saturate(180%) blur(20px);
+            border-bottom: 1px solid var(--border);
+        }
+
+        .nav-inner {
+            max-width: var(--max-width);
+            margin: 0 auto;
+            padding: 0 24px;
+            height: 52px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .nav-brand {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            text-decoration: none;
+            color: var(--text-primary);
+        }
+
+        .nav-icon {
+            width: 32px;
+            height: 32px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .nav-icon svg {
+            width: 28px;
+            height: 28px;
+        }
+
+        .nav-brand span {
+            font-size: 17px;
+            font-weight: 600;
+            letter-spacing: -0.2px;
+        }
+
+        .nav-links {
+            display: flex;
+            align-items: center;
+            gap: 24px;
+        }
+
+        .nav-links a {
+            text-decoration: none;
+            color: var(--text-secondary);
+            font-size: 14px;
+            font-weight: 500;
+            transition: color 0.2s;
+        }
+
+        .nav-links a:hover {
+            color: var(--text-primary);
+        }
+
+        .nav-cta {
+            background: var(--blue);
+            color: white !important;
+            padding: 6px 16px;
+            border-radius: 980px;
+            font-size: 13px !important;
+            font-weight: 500;
+            transition: background 0.2s;
+        }
+
+        .nav-cta:hover {
+            background: var(--blue-hover);
+        }
+
+        /* Sections */
+        section {
+            padding: 80px 24px;
+        }
+
+        .container {
+            max-width: var(--max-width);
+            margin: 0 auto;
+        }
+
+        /* Hero */
+        .hero {
+            padding-top: 140px;
+            padding-bottom: 80px;
+            text-align: center;
+        }
+
+        .hero-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            padding: 6px 14px;
+            border-radius: 980px;
+            font-size: 13px;
+            color: var(--text-secondary);
+            margin-bottom: 24px;
+        }
+
+        .hero-badge .dot {
+            width: 6px;
+            height: 6px;
+            background: var(--green);
+            border-radius: 50%;
+        }
+
+        h1 {
+            font-size: clamp(36px, 5.5vw, 56px);
+            font-weight: 700;
+            letter-spacing: -0.03em;
+            line-height: 1.08;
+            color: var(--text-primary);
+            margin-bottom: 20px;
+            max-width: 720px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+
+        .hero p {
+            font-size: clamp(16px, 2vw, 19px);
+            color: var(--text-secondary);
+            max-width: 600px;
+            margin: 0 auto 36px;
+            line-height: 1.5;
+        }
+
+        .cta-group {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 12px 24px;
+            border-radius: 980px;
+            font-size: 15px;
+            font-weight: 500;
+            text-decoration: none;
+            transition: all 0.2s;
+            border: none;
+            cursor: pointer;
+        }
+
+        .btn-primary {
+            background: var(--blue);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: var(--blue-hover);
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(0, 122, 255, 0.3);
+        }
+
+        .btn-secondary {
+            background: var(--bg-secondary);
+            color: var(--text-primary);
+            border: 1px solid var(--border);
+        }
+
+        .btn-secondary:hover {
+            background: var(--border-light);
+            transform: translateY(-1px);
+        }
+
+        .btn svg {
+            width: 18px;
+            height: 18px;
+        }
+
+        /* Section headers */
+        .section-label {
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--blue);
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            margin-bottom: 8px;
+        }
+
+        .section-title {
+            font-size: clamp(28px, 4vw, 40px);
+            font-weight: 700;
+            letter-spacing: -0.025em;
+            line-height: 1.12;
+            margin-bottom: 16px;
+        }
+
+        .section-subtitle {
+            font-size: 17px;
+            color: var(--text-secondary);
+            max-width: 560px;
+            line-height: 1.5;
+        }
+
+        .section-header {
+            margin-bottom: 48px;
+        }
+
+        .section-header.center {
+            text-align: center;
+        }
+
+        .section-header.center .section-subtitle {
+            margin-left: auto;
+            margin-right: auto;
+        }
+
+        /* Features */
+        .features-section {
+            background: var(--bg-secondary);
+        }
+
+        .features-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 16px;
+        }
+
+        .feature-card {
+            background: var(--bg);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 28px 24px;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        .feature-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.06);
+        }
+
+        .feature-icon {
+            width: 40px;
+            height: 40px;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+            margin-bottom: 16px;
+        }
+
+        .feature-icon.blue { background: rgba(0, 122, 255, 0.1); }
+        .feature-icon.green { background: rgba(52, 199, 89, 0.1); }
+        .feature-icon.orange { background: rgba(255, 149, 0, 0.1); }
+        .feature-icon.purple { background: rgba(88, 86, 214, 0.1); }
+        .feature-icon.pink { background: rgba(255, 45, 85, 0.1); }
+        .feature-icon.teal { background: rgba(90, 200, 250, 0.1); }
+
+        .feature-card h3 {
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: 8px;
+            letter-spacing: -0.01em;
+        }
+
+        .feature-card p {
+            font-size: 14px;
+            color: var(--text-secondary);
+            line-height: 1.5;
+        }
+
+        /* Comparison table */
+        .comparison-section {
+            background: var(--bg);
+        }
+
+        .table-wrap {
+            background: var(--bg);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            overflow: hidden;
+        }
+
+        .comparison-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 15px;
+        }
+
+        .comparison-table thead {
+            background: var(--bg-secondary);
+        }
+
+        .comparison-table th {
+            padding: 14px 20px;
+            text-align: left;
+            font-weight: 600;
+            font-size: 13px;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .comparison-table td {
+            padding: 14px 20px;
+            border-bottom: 1px solid var(--border-light);
+        }
+
+        .comparison-table tbody tr:nth-child(even) {
+            background: var(--bg-tertiary);
+        }
+
+        .comparison-table tbody tr:last-child {
+            background: rgba(0, 122, 255, 0.03);
+        }
+
+        .comparison-table tbody tr:last-child td {
+            font-weight: 600;
+            border-bottom: none;
+        }
+
+        .price-free {
+            color: var(--green);
+            font-weight: 600;
+        }
+
+        .tag {
+            display: inline-flex;
+            align-items: center;
+            padding: 3px 10px;
+            border-radius: 980px;
+            font-size: 12px;
+            font-weight: 500;
+        }
+
+        .tag-yes {
+            background: rgba(52, 199, 89, 0.12);
+            color: #248A3D;
+        }
+
+        .tag-no {
+            background: rgba(142, 142, 147, 0.12);
+            color: var(--text-tertiary);
+        }
+
+        /* Audience */
+        .audience-section {
+            background: var(--bg-secondary);
+        }
+
+        .audience-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 16px;
+        }
+
+        .audience-card {
+            background: var(--bg);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 28px 24px;
+            border-left: 3px solid var(--orange);
+        }
+
+        .audience-card h3 {
+            font-size: 17px;
+            font-weight: 600;
+            margin-bottom: 10px;
+            letter-spacing: -0.01em;
+        }
+
+        .audience-card p {
+            font-size: 14px;
+            color: var(--text-secondary);
+            line-height: 1.55;
+        }
+
+        /* CTA */
+        .cta-section {
+            text-align: center;
+            background: var(--bg);
+        }
+
+        .cta-box {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: 20px;
+            padding: 56px 32px;
+        }
+
+        .cta-box h2 {
+            font-size: clamp(24px, 3.5vw, 36px);
+            font-weight: 700;
+            letter-spacing: -0.025em;
+            margin-bottom: 12px;
+        }
+
+        .cta-box p {
+            font-size: 17px;
+            color: var(--text-secondary);
+            margin-bottom: 28px;
+            max-width: 480px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+
+        /* Footer */
+        footer {
+            border-top: 1px solid var(--border);
+            padding: 32px 24px;
+        }
+
+        .footer-inner {
+            max-width: var(--max-width);
+            margin: 0 auto;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 16px;
+        }
+
+        .footer-left {
+            font-size: 13px;
+            color: var(--text-tertiary);
+        }
+
+        .footer-left a {
+            color: var(--text-secondary);
+            text-decoration: none;
+        }
+
+        .footer-left a:hover {
+            color: var(--text-primary);
+        }
+
+        .footer-right {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+        }
+
+        .footer-right a {
+            font-size: 13px;
+            color: var(--text-secondary);
+            text-decoration: none;
+        }
+
+        .footer-right a:hover {
+            color: var(--text-primary);
+        }
+
+        /* Mobile nav toggle */
+        .nav-toggle {
+            display: none;
+            background: none;
+            border: none;
+            cursor: pointer;
+            padding: 4px;
+            color: var(--text-primary);
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            section {
+                padding: 56px 20px;
+            }
+
+            .hero {
+                padding-top: 120px;
+                padding-bottom: 56px;
+            }
+
+            .features-grid,
+            .audience-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .nav-links {
+                display: none;
+                position: absolute;
+                top: 52px;
+                left: 0;
+                right: 0;
+                background: rgba(255, 255, 255, 0.98);
+                backdrop-filter: blur(20px);
+                -webkit-backdrop-filter: blur(20px);
+                border-bottom: 1px solid var(--border);
+                flex-direction: column;
+                padding: 16px 24px;
+                gap: 16px;
+            }
+
+            .nav-links.open {
+                display: flex;
+            }
+
+            .nav-toggle {
+                display: block;
+            }
+
+            .table-wrap {
+                overflow-x: auto;
+                -webkit-overflow-scrolling: touch;
+            }
+
+            .comparison-table {
+                min-width: 480px;
+            }
+
+            .cta-box {
+                padding: 40px 24px;
+            }
+
+            .footer-inner {
+                flex-direction: column;
+                text-align: center;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .cta-group {
+                flex-direction: column;
+                width: 100%;
+            }
+
+            .cta-group .btn {
+                width: 100%;
+                justify-content: center;
+            }
+        }
+    </style>
+</head>
+<body>
+
+<!-- Navigation -->
+<nav>
+    <div class="nav-inner">
+        <a href="#" class="nav-brand" aria-label="Clio Home">
+            <div class="nav-icon" aria-hidden="true"><svg viewBox="0 0 100 110" fill="var(--text-primary)"><path d="M26 8C26 8 22 20 22 34c0 10 4 18 10 24l0 0c-1 2-2 4-2 6v10h4V68c0-1 0.5-2.5 1.5-4C38 66 40.5 68 44 69v5h4v-5.5c1 0.2 2 0.3 2 0.3s1-0.1 2-0.3V74h4v-5c3.5-1 6-3 8.5-5c1 1.5 1.5 3 1.5 4v6h4V64c0-2-1-4-2-6c6-6 10-14 10-24C78 20 74 8 74 8c-2 8-6 14-10 18V62c-2 2-5 3.5-8 4.5V30h-4v37c-1 0.2-2 0.3-2 0.3s-1-0.1-2-0.3V30h-4v36.5C40.5 65.5 38 64 36 62V26c-4-4-8-10-10-18z"/><path d="M40 80h20v4H40z"/><path d="M42 86h16v3H42z"/><path d="M45 91h10v3H45z"/><path d="M48 96h4v4h-4z"/></svg></div>
+            <span>Clio</span>
+        </a>
+        <button class="nav-toggle" aria-label="Toggle navigation" aria-expanded="false">
+            <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+                <path d="M3 5h14M3 10h14M3 15h14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+            </svg>
+        </button>
+        <div class="nav-links" role="navigation">
+            <a href="#features">Features</a>
+            <a href="#compare">Compare</a>
+            <a href="#who">Who it's for</a>
+            <a href="https://github.com/willscuderi/ClioNoteTakingApp" class="nav-cta">GitHub</a>
+        </div>
+    </div>
+</nav>
+
+<!-- Hero -->
+<section class="hero">
+    <div class="container">
+        <div class="hero-badge"><span class="dot"></span> Open source &amp; free forever</div>
+        <h1>Free AI meeting notes for&nbsp;Mac. Open&nbsp;source. Runs&nbsp;locally.</h1>
+        <p>Clio records your meetings, transcribes them in real time, and generates AI&#8209;powered summaries with action items. Bring your own API key for OpenAI, Claude, or Gemini — or go fully offline with&nbsp;Ollama. No subscription. Your audio never leaves your&nbsp;Mac.</p>
+        <div class="cta-group">
+            <a href="https://github.com/willscuderi/ClioNoteTakingApp/releases/latest" class="btn btn-primary">
+                <svg viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path d="M10 3a1 1 0 0 1 1 1v7.586l2.293-2.293a1 1 0 1 1 1.414 1.414l-4 4a1 1 0 0 1-1.414 0l-4-4a1 1 0 1 1 1.414-1.414L9 11.586V4a1 1 0 0 1 1-1z"/><path d="M4 15a1 1 0 0 1 1 1h10a1 1 0 1 1 0 2H5a1 1 0 0 1-1-1v-1a1 1 0 0 1 1-1z"/></svg>
+                Download for Mac
+            </a>
+            <a href="https://github.com/willscuderi/ClioNoteTakingApp" class="btn btn-secondary">
+                <svg viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M10 0C4.477 0 0 4.477 0 10c0 4.42 2.865 8.166 6.839 9.489.5.092.682-.217.682-.482 0-.237-.009-.866-.013-1.7-2.782.604-3.369-1.34-3.369-1.34-.454-1.156-1.11-1.462-1.11-1.462-.908-.62.069-.608.069-.608 1.003.07 1.531 1.03 1.531 1.03.892 1.529 2.341 1.087 2.91.831.092-.646.35-1.086.636-1.336-2.22-.253-4.555-1.11-4.555-4.943 0-1.091.39-1.984 1.029-2.683-.103-.253-.446-1.27.098-2.647 0 0 .84-.269 2.75 1.025A9.578 9.578 0 0 1 10 4.836a9.578 9.578 0 0 1 2.504.337c1.909-1.294 2.747-1.025 2.747-1.025.546 1.377.203 2.394.1 2.647.64.699 1.028 1.592 1.028 2.683 0 3.842-2.339 4.687-4.566 4.935.359.309.678.919.678 1.852 0 1.336-.012 2.415-.012 2.743 0 .267.18.578.688.48C17.138 18.163 20 14.418 20 10c0-5.523-4.477-10-10-10z" clip-rule="evenodd"/></svg>
+                View on GitHub
+            </a>
+        </div>
+    </div>
+</section>
+
+<!-- Features -->
+<section class="features-section" id="features">
+    <div class="container">
+        <div class="section-header center">
+            <div class="section-label">Features</div>
+            <h2 class="section-title">Everything you need.<br>Nothing you don't.</h2>
+            <p class="section-subtitle">A focused meeting notes app that respects your privacy, your wallet, and your time.</p>
+        </div>
+        <div class="features-grid">
+            <div class="feature-card">
+                <div class="feature-icon blue" aria-hidden="true">🔓</div>
+                <h3>Free &amp; open source</h3>
+                <p>GPL-3.0 licensed. No subscription, no freemium limits, no vendor lock-in. Free forever.</p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon green" aria-hidden="true">🔒</div>
+                <h3>Local transcription</h3>
+                <p>Audio transcription runs on-device with whisper.cpp — your recordings never leave your Mac. Go fully offline with Ollama for summaries too.</p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon purple" aria-hidden="true">💻</div>
+                <h3>Native macOS app</h3>
+                <p>Built with Swift and SwiftUI. Not Electron. Fast, lightweight, and right at home on macOS 14+.</p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon orange" aria-hidden="true">🔑</div>
+                <h3>Bring your own key</h3>
+                <p>Use your own API key for OpenAI, Claude, or Gemini. Or run Ollama for a completely offline setup. No middleman, no markup.</p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon pink" aria-hidden="true">📡</div>
+                <h3>Smart meeting detection</h3>
+                <p>Automatically detects when you join Zoom, Teams, Google Meet, or Webex and starts recording.</p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon teal" aria-hidden="true">📤</div>
+                <h3>Flexible export</h3>
+                <p>Send your notes to Apple Notes, Notion, or export as Markdown. Your data, your format.</p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- Comparison -->
+<section class="comparison-section" id="compare">
+    <div class="container">
+        <div class="section-header center">
+            <div class="section-label">Compare</div>
+            <h2 class="section-title">How Clio stacks up</h2>
+            <p class="section-subtitle">The same features you'd pay $10–$20/month for — completely free.</p>
+        </div>
+        <div class="table-wrap">
+            <table class="comparison-table">
+                <thead>
+                    <tr>
+                        <th>App</th>
+                        <th>Price</th>
+                        <th>Platform</th>
+                        <th>Open Source</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>Granola</td>
+                        <td>$10/mo <span style="color:var(--text-tertiary); font-size:13px;">(free tier: 14-day limit)</span></td>
+                        <td>macOS</td>
+                        <td><span class="tag tag-no">No</span></td>
+                    </tr>
+                    <tr>
+                        <td>Otter.ai</td>
+                        <td>$17/mo</td>
+                        <td>Web / Mobile</td>
+                        <td><span class="tag tag-no">No</span></td>
+                    </tr>
+                    <tr>
+                        <td>Fireflies.ai</td>
+                        <td>$19/mo</td>
+                        <td>Web</td>
+                        <td><span class="tag tag-no">No</span></td>
+                    </tr>
+                    <tr>
+                        <td>tl;dv</td>
+                        <td>$20/mo</td>
+                        <td>Web</td>
+                        <td><span class="tag tag-no">No</span></td>
+                    </tr>
+                    <tr>
+                        <td>Tactiq</td>
+                        <td>$12/mo</td>
+                        <td>Chrome Extension</td>
+                        <td><span class="tag tag-no">No</span></td>
+                    </tr>
+                    <tr>
+                        <td>Clio</td>
+                        <td><span class="price-free">Free forever</span></td>
+                        <td>macOS</td>
+                        <td><span class="tag tag-yes">Yes</span></td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</section>
+
+<!-- Audience -->
+<section class="audience-section" id="who">
+    <div class="container">
+        <div class="section-header center">
+            <div class="section-label">Who it's for</div>
+            <h2 class="section-title">Built for people who care</h2>
+        </div>
+        <div class="audience-grid">
+            <div class="audience-card">
+                <h3>For privacy-conscious professionals</h3>
+                <p>Your audio is transcribed locally with whisper.cpp — recordings never leave your Mac. No accounts, no telemetry, no data collection. Use Ollama to keep everything fully&nbsp;offline.</p>
+            </div>
+            <div class="audience-card">
+                <h3>For developers</h3>
+                <p>Native Swift and SwiftUI. Whisper.cpp with Metal GPU acceleration. Protocol-based architecture. Read the code, fork it, make it&nbsp;yours.</p>
+            </div>
+            <div class="audience-card">
+                <h3>For anyone tired of paying for meeting&nbsp;notes</h3>
+                <p>No subscriptions, no credit card, no 14-day trials. Free forever with unlimited history. Your meetings, your&nbsp;data.</p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- CTA -->
+<section class="cta-section">
+    <div class="container">
+        <div class="cta-box">
+            <h2>Ready to try Clio?</h2>
+            <p>Download the app and have AI-powered meeting notes in&nbsp;minutes.</p>
+            <div class="cta-group">
+                <a href="https://github.com/willscuderi/ClioNoteTakingApp/releases/latest" class="btn btn-primary">
+                    <svg viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path d="M10 3a1 1 0 0 1 1 1v7.586l2.293-2.293a1 1 0 1 1 1.414 1.414l-4 4a1 1 0 0 1-1.414 0l-4-4a1 1 0 1 1 1.414-1.414L9 11.586V4a1 1 0 0 1 1-1z"/><path d="M4 15a1 1 0 0 1 1 1h10a1 1 0 1 1 0 2H5a1 1 0 0 1-1-1v-1a1 1 0 0 1 1-1z"/></svg>
+                    Download for Mac
+                </a>
+                <a href="https://github.com/willscuderi/ClioNoteTakingApp" class="btn btn-secondary">
+                    View on GitHub
+                </a>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- Footer -->
+<footer>
+    <div class="footer-inner">
+        <div class="footer-left">
+            GPL-3.0 License · Built by <a href="https://github.com/willscuderi">Will Scuderi</a>
+        </div>
+        <div class="footer-right">
+            <a href="https://github.com/willscuderi/ClioNoteTakingApp">GitHub</a>
+            <a href="https://github.com/willscuderi/ClioNoteTakingApp/releases/latest">Releases</a>
+            <a href="https://github.com/willscuderi/ClioNoteTakingApp/issues">Issues</a>
+        </div>
+    </div>
+</footer>
+
+<script>
+    // Mobile nav toggle
+    document.querySelector('.nav-toggle').addEventListener('click', function() {
+        const links = document.querySelector('.nav-links');
+        const open = links.classList.toggle('open');
+        this.setAttribute('aria-expanded', open);
+    });
+
+    // Close mobile nav on link click
+    document.querySelectorAll('.nav-links a').forEach(function(link) {
+        link.addEventListener('click', function() {
+            document.querySelector('.nav-links').classList.remove('open');
+            document.querySelector('.nav-toggle').setAttribute('aria-expanded', 'false');
+        });
+    });
+</script>
+
+</body>
+</html>

@@ -6,13 +6,19 @@ final class ExportCoordinator: ExportServiceProtocol {
     private let markdown: MarkdownExportService
     private let appleNotes: AppleNotesExportService
     private let notion: NotionExportService
+    let obsidian: ObsidianExportService
+    let oneNote: OneNoteExportService
 
     init(markdown: MarkdownExportService,
          appleNotes: AppleNotesExportService,
-         notion: NotionExportService) {
+         notion: NotionExportService,
+         obsidian: ObsidianExportService = ObsidianExportService(),
+         oneNote: OneNoteExportService = OneNoteExportService()) {
         self.markdown = markdown
         self.appleNotes = appleNotes
         self.notion = notion
+        self.obsidian = obsidian
+        self.oneNote = oneNote
     }
 
     func exportMarkdown(meeting: Meeting) throws -> URL {
@@ -23,8 +29,19 @@ final class ExportCoordinator: ExportServiceProtocol {
         try await appleNotes.export(meeting: meeting)
     }
 
-    func exportToNotion(meeting: Meeting, apiKey: String) async throws {
+    @discardableResult
+    func exportToNotion(meeting: Meeting, apiKey: String) async throws -> String {
         try await notion.export(meeting: meeting, apiKey: apiKey.isEmpty ? nil : apiKey)
+    }
+
+    func exportToObsidian(meeting: Meeting) throws {
+        let content = buildMarkdownContent(meeting: meeting)
+        try obsidian.export(meeting: meeting, markdownContent: content)
+    }
+
+    func exportToOneNote(meeting: Meeting) throws {
+        let content = buildMarkdownContent(meeting: meeting)
+        try oneNote.export(meeting: meeting, markdownContent: content)
     }
 
     func testNotionConnection(apiKey: String?) async -> (success: Bool, message: String) {

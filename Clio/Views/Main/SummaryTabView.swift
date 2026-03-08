@@ -3,9 +3,31 @@ import SwiftUI
 struct SummaryTabView: View {
     let meeting: Meeting
     let isGenerating: Bool
+    var streamedSummary: String = ""
 
     var body: some View {
-        if let summary = meeting.summary {
+        if isGenerating && !streamedSummary.isEmpty {
+            // Streaming: show text as it arrives
+            ScrollView {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(streamedSummary)
+                        .font(.system(size: 15))
+                        .lineSpacing(4)
+                        .textSelection(.enabled)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+
+                    HStack(spacing: 6) {
+                        ProgressView()
+                            .controlSize(.small)
+                        Text("Generating...")
+                            .font(.system(size: 12))
+                            .foregroundStyle(.secondary)
+                    }
+                    .padding(.top, 4)
+                }
+                .padding(20)
+            }
+        } else if let summary = meeting.summary {
             ScrollView {
                 Text(summary)
                     .font(.system(size: 15))
@@ -18,7 +40,7 @@ struct SummaryTabView: View {
             VStack(spacing: 12) {
                 Spacer()
                 ProgressView()
-                Text("Generating summary...")
+                Text("Connecting to AI...")
                     .font(.system(size: 14))
                     .foregroundStyle(.secondary)
                 Spacer()

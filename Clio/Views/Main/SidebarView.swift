@@ -3,15 +3,15 @@ import SwiftData
 
 struct SidebarView: View {
     @Bindable var viewModel: MeetingListViewModel
-    @Binding var selectedMeeting: Meeting?
+    @Binding var selectedMeetingIDs: Set<PersistentIdentifier>
     var detailVM: MeetingDetailViewModel?
     var recordingVM: RecordingViewModel?
     @Environment(ServiceContainer.self) private var services
     @Environment(\.modelContext) private var modelContext
     @Query(sort: \Meeting.createdAt, order: .reverse) private var meetings: [Meeting]
     @Query(sort: \MeetingFolder.sortOrder) private var folders: [MeetingFolder]
-    @State private var selectedFolderID: PersistentIdentifier? // nil = All Meetings
-    @State private var isCreatingFolder = false
+    @Binding var selectedFolderID: PersistentIdentifier?
+    @Binding var isCreatingFolder: Bool
     @State private var newFolderName = ""
     @State private var renamingFolder: MeetingFolder?
     @State private var renameFolderName = ""
@@ -20,6 +20,11 @@ struct SidebarView: View {
         let filtered = viewModel.filteredMeetings(meetings)
         guard let folderID = selectedFolderID else { return filtered }
         return filtered.filter { $0.folder?.persistentModelID == folderID }
+    }
+
+    /// Resolved selected meetings for export
+    private var selectedMeetings: [Meeting] {
+        meetings.filter { selectedMeetingIDs.contains($0.persistentModelID) }
     }
 
     var body: some View {
@@ -37,6 +42,7 @@ struct SidebarView: View {
             if !folders.isEmpty || isCreatingFolder {
                 FolderBar(
                     folders: folders,
+                    meetings: meetings,
                     selectedFolderID: $selectedFolderID,
                     isCreatingFolder: $isCreatingFolder,
                     newFolderName: $newFolderName,
@@ -45,41 +51,30 @@ struct SidebarView: View {
                     onCreateFolder: createFolder,
                     onDeleteFolder: deleteFolder,
                     onStartRename: startRename,
-                    onCommitRename: commitRename
+                    onCommitRename: commitRename,
+                    onMoveToFolder: { meeting, folder in
+                        meeting.folder = folder
+                        try? modelContext.save()
+                    }
                 )
                 Divider()
             }
 
-            // MARK: - Meeting Files
-            List(selection: $selectedMeeting) {
-                ForEach(displayedMeetings) { meeting in
-                    MeetingRowView(meeting: meeting)
-                        .tag(meeting)
-                        .contextMenu {
-                            if !folders.isEmpty {
-                                Menu("Move to Folder") {
-                                    Button("None (Remove from folder)") {
-                                        meeting.folder = nil
-                                        try? modelContext.save()
-                                    }
-                                    Divider()
-                                    ForEach(folders) { folder in
-                                        Button(folder.name) {
-                                            meeting.folder = folder
-                                            try? modelContext.save()
-                                        }
-                                    }
-                                }
-                            }
-                            Divider()
-                            Button("Delete", role: .destructive) {
-                                viewModel.deleteMeeting(meeting, context: modelContext)
-                                if selectedMeeting == meeting {
-                                    selectedMeeting = nil
-                                }
-                            }
-                        }
-                }
+            // MARK: - Meeting List (Date-Grouped)
+            List(selection: $selectedMeetingIDs) {
+                DateGroupedMeetingList(
+                    meetings: displayedMeetings,
+                    folders: folders,
+                    selectedMeetingIDs: $selectedMeetingIDs,
+                    onDelete: { meeting in
+                        viewModel.deleteMeeting(meeting, context: modelContext)
+                        selectedMeetingIDs.remove(meeting.persistentModelID)
+                    },
+                    onMoveToFolder: { meeting, folder in
+                        meeting.folder = folder
+                        try? modelContext.save()
+                    }
+                )
             }
             .searchable(text: $viewModel.searchText, prompt: "Search meetings")
             .overlay {
@@ -110,32 +105,6 @@ struct SidebarView: View {
             }
         }
         .navigationTitle("Clio")
-        .toolbar {
-            ToolbarItemGroup(placement: .primaryAction) {
-                Button {
-                    isCreatingFolder = true
-                    newFolderName = ""
-                } label: {
-                    Label("New Folder", systemImage: "folder.badge.plus")
-                }
-                .help("Create a new folder")
-
-                Menu {
-                    ForEach(ExportDestination.allCases) { dest in
-                        Button {
-                            guard let detailVM else { return }
-                            let completed = meetings.filter { $0.status == .completed }
-                            Task { await detailVM.bulkExport(meetings: completed, to: dest) }
-                        } label: {
-                            Label(dest.rawValue, systemImage: dest.icon)
-                        }
-                    }
-                } label: {
-                    Label("Export All", systemImage: "arrow.up.doc")
-                }
-                .disabled(meetings.filter { $0.status == .completed }.isEmpty)
-            }
-        }
     }
 
     // MARK: - Folder Actions
@@ -183,6 +152,7 @@ struct SidebarView: View {
 
 private struct FolderBar: View {
     let folders: [MeetingFolder]
+    let meetings: [Meeting]
     @Binding var selectedFolderID: PersistentIdentifier?
     @Binding var isCreatingFolder: Bool
     @Binding var newFolderName: String
@@ -192,18 +162,28 @@ private struct FolderBar: View {
     let onDeleteFolder: (MeetingFolder) -> Void
     let onStartRename: (MeetingFolder) -> Void
     let onCommitRename: () -> Void
+    let onMoveToFolder: (Meeting, MeetingFolder?) -> Void
 
     var body: some View {
         VStack(spacing: 0) {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 4) {
-                    // "All" chip
+                    // "All" chip — drop here to remove from folder
                     FolderChip(
                         name: "All",
                         icon: "tray.full",
                         isSelected: selectedFolderID == nil,
                         action: { selectedFolderID = nil }
                     )
+                    .dropDestination(for: String.self) { items, _ in
+                        for uuidStr in items {
+                            if let uuid = UUID(uuidString: uuidStr),
+                               let meeting = meetings.first(where: { $0.id == uuid }) {
+                                onMoveToFolder(meeting, nil)
+                            }
+                        }
+                        return true
+                    }
 
                     ForEach(folders) { folder in
                         if renamingFolder?.persistentModelID == folder.persistentModelID {
@@ -221,6 +201,15 @@ private struct FolderBar: View {
                                 isSelected: selectedFolderID == folder.persistentModelID,
                                 action: { selectedFolderID = folder.persistentModelID }
                             )
+                            .dropDestination(for: String.self) { items, _ in
+                                for uuidStr in items {
+                                    if let uuid = UUID(uuidString: uuidStr),
+                                       let meeting = meetings.first(where: { $0.id == uuid }) {
+                                        onMoveToFolder(meeting, folder)
+                                    }
+                                }
+                                return true
+                            }
                             .contextMenu {
                                 Button("Rename") { onStartRename(folder) }
                                 Divider()

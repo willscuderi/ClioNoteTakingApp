@@ -28,6 +28,8 @@ struct OnboardingView: View {
                         LLMStepView(viewModel: viewModel)
                     case .integrations:
                         IntegrationsStepView(viewModel: viewModel)
+                    case .backup:
+                        BackupLocationStepView(viewModel: viewModel)
                     case .complete:
                         CompletionStepView(onComplete: onComplete)
                     }
@@ -792,7 +794,152 @@ struct FolderPickerRow: View {
     }
 }
 
-// MARK: - Step 5: Completion
+// MARK: - Step 5: Backup Location
+
+struct BackupLocationStepView: View {
+    @Bindable var viewModel: OnboardingViewModel
+
+    var body: some View {
+        VStack(spacing: 20) {
+            StepHeader(
+                title: "Back up your meeting notes",
+                subtitle: "Choose a folder to automatically save your meeting notes. We recommend a cloud-synced folder so your notes are backed up and accessible across devices."
+            )
+
+            backupOptions
+                .padding(.horizontal, 40)
+
+            if viewModel.backupFolderPath != nil {
+                backupInfoNote
+                    .padding(.horizontal, 40)
+            }
+
+            Spacer()
+        }
+        .padding(.top, 16)
+    }
+
+    private var backupOptions: some View {
+        VStack(spacing: 10) {
+            ForEach(viewModel.suggestedBackupPaths, id: \.path) { suggestion in
+                BackupPathRow(
+                    name: suggestion.name,
+                    path: suggestion.path,
+                    isSelected: viewModel.backupFolderPath == suggestion.path,
+                    action: { viewModel.backupFolderPath = suggestion.path }
+                )
+            }
+
+            customFolderButton
+        }
+    }
+
+    private var customFolderButton: some View {
+        let isCustomSelected: Bool = {
+            guard let path = viewModel.backupFolderPath else { return false }
+            return !viewModel.suggestedBackupPaths.contains(where: { $0.path == path })
+        }()
+
+        return Button {
+            viewModel.selectBackupFolder()
+        } label: {
+            HStack(spacing: 14) {
+                Image(systemName: "folder")
+                    .font(.title3)
+                    .frame(width: 28)
+                    .foregroundStyle(.secondary)
+
+                VStack(alignment: .leading, spacing: 1) {
+                    Text("Choose a different folder...")
+                        .font(.subheadline.weight(.medium))
+                    if isCustomSelected, let path = viewModel.backupFolderPath {
+                        Text(URL(fileURLWithPath: path).lastPathComponent)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                    }
+                }
+
+                Spacer()
+
+                if isCustomSelected {
+                    Image(systemName: "checkmark.circle.fill")
+                        .foregroundStyle(.green)
+                        .font(.body)
+                }
+            }
+            .padding(12)
+            .background(RoundedRectangle(cornerRadius: 10).fill(Color(nsColor: .quaternarySystemFill)))
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var backupInfoNote: some View {
+        HStack(spacing: 6) {
+            Image(systemName: "info.circle")
+                .font(.caption2)
+            Text("Notes will be organized in Year / Month / Date folders automatically.")
+                .font(.caption)
+        }
+        .foregroundStyle(.secondary)
+    }
+}
+
+private struct BackupPathRow: View {
+    let name: String
+    let path: String
+    let isSelected: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 14) {
+                Image(systemName: iconName)
+                    .font(.title3)
+                    .frame(width: 28)
+                    .foregroundStyle(isSelected ? Color.accentColor : .secondary)
+
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(name)
+                        .font(.subheadline.weight(.medium))
+                    Text("Clio Meeting Notes")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+
+                Spacer()
+
+                if isSelected {
+                    Image(systemName: "checkmark.circle.fill")
+                        .foregroundStyle(.green)
+                        .font(.body)
+                }
+            }
+            .padding(12)
+            .background(
+                RoundedRectangle(cornerRadius: 10)
+                    .fill(isSelected ? Color.accentColor.opacity(0.08) : Color(nsColor: .quaternarySystemFill))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 10)
+                    .stroke(isSelected ? Color.accentColor : Color.clear, lineWidth: 1.5)
+            )
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var iconName: String {
+        switch name {
+        case "iCloud Drive": return "icloud"
+        case "Google Drive": return "externaldrive.badge.icloud"
+        case "Dropbox": return "shippingbox"
+        case "OneDrive": return "cloud"
+        default: return "folder"
+        }
+    }
+}
+
+// MARK: - Step 6: Completion
 
 struct CompletionStepView: View {
     var onComplete: () -> Void

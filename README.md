@@ -14,11 +14,14 @@ Clio auto-updates via [Sparkle](https://sparkle-project.org/) — once installed
 
 - **Real-time transcription** — Captures system audio and microphone simultaneously, transcribes live using local [whisper.cpp](https://github.com/ggml-org/whisper.cpp) or OpenAI Whisper API
 - **AI-powered notes** — Generates summaries, key decisions, and action items via OpenAI, Claude, Gemini, or local Ollama models
+- **Streaming summaries** — AI-generated summaries stream in progressively as they're written, so you can start reading immediately
+- **AI Search ("Ask AI")** — Ask natural-language questions about your meetings and get answers sourced from transcripts and summaries. Works across all meetings or scoped to a single meeting
 - **Smart meeting detection** — Detects when you join a Zoom, Teams, Meet, or Webex call by monitoring microphone activity (not just app launch), and prompts you to start recording with a floating overlay
 - **Calendar integration** — Reads upcoming meetings from macOS Calendar (Google, Outlook, iCloud) and shows them in the sidebar
-- **Multiple export options** — Export notes to Apple Notes, Notion, or Markdown files
+- **Multiple export options** — Export notes to Apple Notes, Notion, Obsidian, OneNote, or Markdown files. Notion exports include a direct link to open the page
+- **Markdown notes editor** — Rich formatting toolbar with headings, bold, italic, bullet lists, and checkboxes for meeting notes
+- **Folder organisation** — Group and organise meeting recordings into folders with drag-and-drop support
 - **Menu bar app** — Quick-access recording controls from the menu bar
-- **Folder organisation** — Group and organise meeting recordings into folders
 - **Bookmarks** — Mark key moments during a meeting for quick reference
 - **Global hotkeys** — Start/stop recording and create bookmarks from anywhere
 - **Auto-updates** — Checks for new versions daily via Sparkle
@@ -43,9 +46,19 @@ ollama pull llama3.2
 | Provider | What you need |
 |---|---|
 | OpenAI | API key — used for GPT summarisation and/or Whisper transcription |
-| Anthropic (Claude) | API key — used for summarisation |
-| Google (Gemini) | API key — used for summarisation |
+| Anthropic (Claude) | API key — used for summarisation and AI Search |
+| Google (Gemini) | API key — used for summarisation and AI Search |
 | Ollama | Local install — free, no API key needed. Clio can install it for you |
+
+## Export Destinations
+
+| Destination | How it works |
+|---|---|
+| Markdown | Save `.md` file anywhere via save panel |
+| Apple Notes | Creates a note directly in Apple Notes |
+| Notion | Creates a page via Notion API — shows "Open in Notion" link |
+| Obsidian | Writes `.md` file to your vault's `Clio Meeting Notes` folder |
+| OneNote | Opens formatted meeting notes in Microsoft OneNote |
 
 ## Meeting Detection
 
@@ -98,18 +111,18 @@ Clio/
 ├── Services/
 │   ├── Audio/           # System audio + mic capture, mixing, buffering
 │   ├── Calendar/        # EventKit integration, meeting app detection
-│   ├── Export/          # Markdown, Apple Notes, Notion exporters
-│   ├── LLM/            # OpenAI, Claude, Gemini, Ollama providers
+│   ├── Export/          # Markdown, Apple Notes, Notion, Obsidian, OneNote exporters
+│   ├── LLM/            # OpenAI, Claude, Gemini, Ollama providers + streaming
 │   ├── Transcription/  # Local whisper.cpp + OpenAI Whisper API
 │   └── Protocols/      # Service protocol definitions
-├── ViewModels/          # MVVM view models
+├── ViewModels/          # MVVM view models (Recording, MeetingDetail, AISearch, Transcript)
 ├── Views/
-│   ├── Main/           # Sidebar, content, transcript/summary/notes tabs
+│   ├── Main/           # Sidebar, content, transcript/summary/notes tabs, AI Search
 │   ├── Recording/      # Floating indicators, meeting detection panel
 │   ├── MenuBar/        # Menu bar extra
 │   ├── Settings/       # Preferences (API keys, audio, general)
-│   ├── Onboarding/     # First-launch setup
-│   └── Components/     # Reusable UI components
+│   ├── Onboarding/     # First-launch setup with Ollama install
+│   └── Components/     # Reusable UI (ProviderModelButton, MarkdownNotesEditor)
 ├── Utilities/          # ServiceContainer (DI), helpers
 └── Resources/          # Whisper model, assets
 ```

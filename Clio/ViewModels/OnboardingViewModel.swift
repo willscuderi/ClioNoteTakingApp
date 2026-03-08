@@ -17,6 +17,7 @@ final class OnboardingViewModel {
         case transcription
         case llm
         case integrations
+        case backup
         case complete
     }
 
@@ -254,6 +255,34 @@ final class OnboardingViewModel {
         }
     }
 
+    // MARK: - Step 5: Backup Location
+
+    var backupFolderPath: String?
+    private let backupService = BackupService()
+
+    var suggestedBackupPaths: [(name: String, path: String)] {
+        backupService.suggestedBackupPaths
+    }
+
+    func selectBackupFolder() {
+        let panel = NSOpenPanel()
+        panel.canChooseDirectories = true
+        panel.canChooseFiles = false
+        panel.canCreateDirectories = true
+        panel.allowsMultipleSelection = false
+        panel.message = "Choose a folder to back up your meeting notes"
+        panel.prompt = "Select"
+        if panel.runModal() == .OK, let url = panel.url {
+            backupFolderPath = url.path
+        }
+    }
+
+    func saveBackupSettings() {
+        if let path = backupFolderPath {
+            UserDefaults.standard.set(path, forKey: "backupFolderPath")
+        }
+    }
+
     // MARK: - Completion
 
     static let onboardingCompleteKey = "hasCompletedOnboarding"
@@ -268,6 +297,8 @@ final class OnboardingViewModel {
         if !deepgramAPIKey.isEmpty { saveDeepgramKey() }
         saveLLMKey()
         saveIntegrationKeys()
+
+        saveBackupSettings()
 
         // Save preferred transcription source
         let source: TranscriptionSource = transcriptionChoice == .onDevice ? .local : .openAIWhisper

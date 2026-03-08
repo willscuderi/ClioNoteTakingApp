@@ -17,6 +17,16 @@ struct MeetingContentView: View {
     @State private var selectedTab: MeetingContentTab = .transcript
 
     var body: some View {
+        // Show split view during active recording
+        if meeting.status == .recording || meeting.status == .paused {
+            RecordingSplitView(meeting: meeting, transcriptVM: transcriptVM)
+        } else {
+            normalContentView
+        }
+    }
+
+    @ViewBuilder
+    private var normalContentView: some View {
         VStack(alignment: .leading, spacing: 0) {
             // MARK: - Header
             VStack(alignment: .leading, spacing: 8) {
@@ -50,7 +60,7 @@ struct MeetingContentView: View {
                 Spacer()
 
                 if meeting.status == .completed {
-                    ProviderModelButton(viewModel: detailVM)
+                    ProviderModelButton(selectedProvider: $detailVM.selectedLLMProvider, selectedModelID: $detailVM.selectedModelID)
 
                     Button {
                         Task {
@@ -87,7 +97,7 @@ struct MeetingContentView: View {
                 case .transcript:
                     TranscriptTabView(meeting: meeting, viewModel: transcriptVM)
                 case .summary:
-                    SummaryTabView(meeting: meeting, isGenerating: detailVM.isGeneratingSummary)
+                    SummaryTabView(meeting: meeting, isGenerating: detailVM.isGeneratingSummary, streamedSummary: detailVM.streamedSummary)
                 case .notes:
                     NotesTabView(meeting: meeting)
                 }
@@ -106,7 +116,20 @@ struct MeetingContentView: View {
             get: { detailVM.successMessage != nil },
             set: { if !$0 { detailVM.successMessage = nil } }
         )) {
-            Button("OK") { detailVM.successMessage = nil }
+            if let urlString = detailVM.lastExportURL,
+               let url = URL(string: urlString) {
+                Button("Open in Notion") {
+                    NSWorkspace.shared.open(url)
+                    detailVM.lastExportURL = nil
+                    detailVM.successMessage = nil
+                }
+                Button("OK") {
+                    detailVM.lastExportURL = nil
+                    detailVM.successMessage = nil
+                }
+            } else {
+                Button("OK") { detailVM.successMessage = nil }
+            }
         } message: {
             Text(detailVM.successMessage ?? "")
         }
@@ -127,6 +150,16 @@ struct MeetingContentView: View {
                         Task { await detailVM.exportToNotion(meeting: meeting) }
                     } label: {
                         Label("Notion", systemImage: "square.and.arrow.up")
+                    }
+                    Button {
+                        detailVM.exportToObsidian(meeting: meeting)
+                    } label: {
+                        Label("Obsidian", systemImage: "diamond")
+                    }
+                    Button {
+                        detailVM.exportToOneNote(meeting: meeting)
+                    } label: {
+                        Label("OneNote", systemImage: "book.closed")
                     }
                 } label: {
                     Label("Export", systemImage: "square.and.arrow.up")

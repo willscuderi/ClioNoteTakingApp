@@ -7,6 +7,7 @@ import os
 @Observable
 final class MeetingDetailViewModel {
     var isGeneratingSummary = false
+    var streamedSummary: String = ""
     var selectedLLMProvider: LLMProvider = .ollama {
         didSet { selectedModelID = selectedLLMProvider.defaultModel.id }
     }
@@ -18,6 +19,7 @@ final class MeetingDetailViewModel {
     }
     var errorMessage: String?
     var successMessage: String?
+    var lastExportURL: String?
 
     private let services: ServiceContainer
     private let logger = Logger.llm
@@ -29,25 +31,36 @@ final class MeetingDetailViewModel {
     func generateSummary(for meeting: Meeting, context: ModelContext) async {
         guard !isGeneratingSummary else { return }
         isGeneratingSummary = true
+        streamedSummary = ""
         errorMessage = nil
 
-        do {
-            let transcript = meeting.fullTranscript
-            guard !transcript.isEmpty else {
-                errorMessage = "No transcript available to summarize"
-                isGeneratingSummary = false
-                return
-            }
+        let transcript = meeting.fullTranscript
+        guard !transcript.isEmpty else {
+            errorMessage = "No transcript available to summarize"
+            isGeneratingSummary = false
+            return
+        }
 
-            let summary = try await services.llm.summarize(
+        do {
+            let stream = services.llm.summarizeStreaming(
                 transcript: transcript,
                 provider: selectedLLMProvider,
                 model: resolvedModel
             )
-            meeting.summary = summary
+
+            for try await chunk in stream {
+                streamedSummary += chunk
+            }
+
+            meeting.summary = streamedSummary
             try? context.save()
             logger.info("Summary generated for: \(meeting.title)")
         } catch {
+            // If we got partial content, still save it
+            if !streamedSummary.isEmpty {
+                meeting.summary = streamedSummary
+                try? context.save()
+            }
             errorMessage = error.localizedDescription
             logger.error("Summary generation failed: \(error.localizedDescription)")
         }
@@ -90,8 +103,35 @@ final class MeetingDetailViewModel {
     func exportToNotion(meeting: Meeting) async {
         do {
             let apiKey = try services.keychain.loadAPIKey(for: "notion") ?? ""
-            try await services.export.exportToNotion(meeting: meeting, apiKey: apiKey)
+            let url = try await services.export.exportToNotion(meeting: meeting, apiKey: apiKey)
+            lastExportURL = url
             successMessage = "Exported \"\(meeting.title)\" to Notion"
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    func exportToObsidian(meeting: Meeting) {
+        do {
+            guard let coordinator = services.export as? ExportCoordinator else {
+                errorMessage = "Export service not configured"
+                return
+            }
+            try coordinator.exportToObsidian(meeting: meeting)
+            successMessage = "Exported \"\(meeting.title)\" to Obsidian"
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    func exportToOneNote(meeting: Meeting) {
+        do {
+            guard let coordinator = services.export as? ExportCoordinator else {
+                errorMessage = "Export service not configured"
+                return
+            }
+            try coordinator.exportToOneNote(meeting: meeting)
+            successMessage = "Exported \"\(meeting.title)\" to OneNote"
         } catch {
             errorMessage = error.localizedDescription
         }
@@ -170,6 +210,14 @@ final class MeetingDetailViewModel {
                 case .notion:
                     let apiKey = try services.keychain.loadAPIKey(for: "notion") ?? ""
                     try await services.export.exportToNotion(meeting: meeting, apiKey: apiKey)
+                case .obsidian:
+                    if let coordinator = services.export as? ExportCoordinator {
+                        try coordinator.exportToObsidian(meeting: meeting)
+                    }
+                case .oneNote:
+                    if let coordinator = services.export as? ExportCoordinator {
+                        try coordinator.exportToOneNote(meeting: meeting)
+                    }
                 case .markdown:
                     break // Handled above
                 }
@@ -210,6 +258,8 @@ enum ExportDestination: String, CaseIterable, Identifiable {
     case markdown = "Markdown"
     case appleNotes = "Apple Notes"
     case notion = "Notion"
+    case obsidian = "Obsidian"
+    case oneNote = "OneNote"
 
     var id: String { rawValue }
 
@@ -218,6 +268,8 @@ enum ExportDestination: String, CaseIterable, Identifiable {
         case .markdown: "doc.text"
         case .appleNotes: "note.text"
         case .notion: "square.and.arrow.up"
+        case .obsidian: "diamond"
+        case .oneNote: "book.closed"
         }
     }
 }
