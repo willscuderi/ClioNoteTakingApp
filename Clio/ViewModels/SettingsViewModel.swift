@@ -10,6 +10,7 @@ final class SettingsViewModel {
     var grokKey = ""
     var notionKey = ""
     var deepgramKey = ""
+    var assemblyAIKey = ""
     var preferredTranscriptionSource: TranscriptionSource = .local
     var preferredLLMProvider: LLMProvider = .ollama
     var errorMessage: String?
@@ -29,6 +30,7 @@ final class SettingsViewModel {
         grokKey = (try? keychain.loadAPIKey(for: "grok")) ?? ""
         notionKey = (try? keychain.loadAPIKey(for: "notion")) ?? ""
         deepgramKey = (try? keychain.loadAPIKey(for: "deepgram")) ?? ""
+        assemblyAIKey = (try? keychain.loadAPIKey(for: "assemblyai")) ?? ""
     }
 
     /// Save a single key immediately when it changes.
@@ -58,6 +60,7 @@ final class SettingsViewModel {
             case "grok": grokKey = ""
             case "notion": notionKey = ""
             case "deepgram": deepgramKey = ""
+            case "assemblyai": assemblyAIKey = ""
             default: break
             }
             showSuccess("Removed \(provider) key")
@@ -71,6 +74,7 @@ final class SettingsViewModel {
             case "grok": grokKey = ""
             case "notion": notionKey = ""
             case "deepgram": deepgramKey = ""
+            case "assemblyai": assemblyAIKey = ""
             default: break
             }
         }
@@ -85,6 +89,7 @@ final class SettingsViewModel {
             saveOrDelete(grokKey, for: "grok")
             saveOrDelete(notionKey, for: "notion")
             saveOrDelete(deepgramKey, for: "deepgram")
+            saveOrDelete(assemblyAIKey, for: "assemblyai")
 
             errorMessage = nil
             successMessage = "All API keys saved"

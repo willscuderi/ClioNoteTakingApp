@@ -53,6 +53,7 @@ struct GeneralSettingsView: View {
                 Picker("Transcription", selection: $viewModel.preferredTranscriptionSource) {
                     Text("Local (Whisper.cpp)").tag(TranscriptionSource.local)
                     Text("OpenAI Whisper API").tag(TranscriptionSource.openAIWhisper)
+                    Text("AssemblyAI (Speaker Diarization)").tag(TranscriptionSource.assemblyAI)
                 }
             }
 

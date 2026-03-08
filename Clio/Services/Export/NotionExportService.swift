@@ -424,19 +424,52 @@ final class NotionExportService {
         apiKey: String,
         body: [String: Any]? = nil
     ) async throws -> (Data, URLResponse) {
-        let url = URL(string: baseURL + path)!
-        var request = URLRequest(url: url)
-        request.httpMethod = method
-        request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
-        request.setValue(notionVersion, forHTTPHeaderField: "Notion-Version")
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.timeoutInterval = 30
+        let maxAttempts = 3
+        var lastError: Error?
 
-        if let body {
-            request.httpBody = try JSONSerialization.data(withJSONObject: body)
+        for attempt in 1...maxAttempts {
+            let url = URL(string: baseURL + path)!
+            var request = URLRequest(url: url)
+            request.httpMethod = method
+            request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
+            request.setValue(notionVersion, forHTTPHeaderField: "Notion-Version")
+            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            request.timeoutInterval = 30
+
+            if let body {
+                request.httpBody = try JSONSerialization.data(withJSONObject: body)
+            }
+
+            do {
+                let (data, response) = try await URLSession.shared.data(for: request)
+
+                // Check if we should retry on transient errors
+                if let httpResponse = response as? HTTPURLResponse {
+                    let code = httpResponse.statusCode
+                    let isTransient = code == 429 || (code >= 500 && code <= 599)
+
+                    if isTransient && attempt < maxAttempts {
+                        let backoff = pow(2.0, Double(attempt - 1)) // 1s, 2s, 4s
+                        logger.warning("Notion API transient error \(code) on attempt \(attempt)/\(maxAttempts), retrying in \(backoff)s...")
+                        try await Task.sleep(for: .seconds(backoff))
+                        continue
+                    }
+                }
+
+                return (data, response)
+            } catch {
+                lastError = error
+                // Retry network errors (timeout, connection reset, etc.)
+                if attempt < maxAttempts {
+                    let backoff = pow(2.0, Double(attempt - 1))
+                    logger.warning("Notion request failed on attempt \(attempt)/\(maxAttempts): \(error.localizedDescription), retrying in \(backoff)s...")
+                    try await Task.sleep(for: .seconds(backoff))
+                    continue
+                }
+            }
         }
 
-        return try await URLSession.shared.data(for: request)
+        throw lastError ?? ExportError.networkError("Notion request failed after \(maxAttempts) attempts")
     }
 
     // MARK: - Block Helpers

@@ -76,7 +76,6 @@ struct SidebarView: View {
                     }
                 )
             }
-            .searchable(text: $viewModel.searchText, prompt: "Search meetings")
             .overlay {
                 if let detailVM, detailVM.isBulkExporting {
                     VStack(spacing: 8) {
@@ -146,6 +145,7 @@ struct SidebarView: View {
         renamingFolder = nil
         renameFolderName = ""
     }
+
 }
 
 // MARK: - Folder Bar

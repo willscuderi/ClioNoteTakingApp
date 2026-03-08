@@ -26,6 +26,21 @@ struct APIKeysSettingsView: View {
                             linkURL: URL(string: "https://platform.openai.com/api-keys")
                         ),
                         ProviderKeyConfig(
+                            name: "AssemblyAI",
+                            icon: "person.2.wave.2",
+                            keychainID: "assemblyai",
+                            key: $viewModel.assemblyAIKey,
+                            placeholder: "Your AssemblyAI API key",
+                            steps: [
+                                "Click the link below to open AssemblyAI's dashboard",
+                                "Sign in or create an account",
+                                "Copy your API key from the dashboard",
+                                "Paste it here, then select AssemblyAI as your transcription engine"
+                            ],
+                            linkLabel: "Open AssemblyAI Dashboard",
+                            linkURL: URL(string: "https://www.assemblyai.com/app")
+                        ),
+                        ProviderKeyConfig(
                             name: "Deepgram",
                             icon: "waveform",
                             keychainID: "deepgram",

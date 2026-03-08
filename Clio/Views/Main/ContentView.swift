@@ -19,6 +19,7 @@ struct ContentView: View {
     @State private var panelController = RecordingPanelController()
     @State private var aiSearchVM: AISearchViewModel?
     @State private var showAISearch = false
+    @State private var aiQuestionText = ""
 
     /// Use the shared VM if provided, otherwise the locally-created one.
     private var activeRecordingVM: RecordingViewModel? {
@@ -73,6 +74,7 @@ struct ContentView: View {
             }
         }
         .frame(minWidth: 750, minHeight: 600)
+        .toolbarBackground(.visible, for: .windowToolbar)
         .toolbar {
             // Sidebar toolbar items (Select All, New Folder, Export)
             ToolbarItemGroup(placement: .navigation) {
@@ -131,16 +133,16 @@ struct ContentView: View {
                         : allMeetings.filter { $0.status == .completed }.isEmpty
                 )
 
-                Button {
-                    showAISearch = true
-                } label: {
-                    Label("Ask AI", systemImage: "sparkles")
-                }
-                .help("Ask AI about your meetings")
             }
 
-            // Recording toolbar items
+            // Search + Recording toolbar items
             ToolbarItemGroup(placement: .primaryAction) {
+                UnifiedSearchBar(
+                    searchText: $listVM.searchText,
+                    aiQuestionText: $aiQuestionText,
+                    onAISubmit: submitAIQuestion
+                )
+
                 if let vm = activeRecordingVM {
                     RecordingToolbarView(viewModel: vm)
                 }
@@ -177,6 +179,16 @@ struct ContentView: View {
                 selectedMeetingIDs = [meeting.persistentModelID]
             }
         }
+    }
+
+    // MARK: - AI Question
+
+    private func submitAIQuestion() {
+        let trimmed = aiQuestionText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        aiSearchVM?.question = trimmed
+        aiQuestionText = ""
+        showAISearch = true
     }
 }
 
@@ -284,8 +296,10 @@ struct RecordingToolbarView: View {
             Button {
                 Task { await viewModel.startRecording(context: modelContext) }
             } label: {
-                Label("Record", systemImage: "record.circle")
+                Label("New Meeting", systemImage: "record.circle.fill")
+                    .foregroundStyle(.white)
             }
+            .tint(.red)
         }
     }
 }

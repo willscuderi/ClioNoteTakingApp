@@ -10,6 +10,8 @@ struct ClioApp: App {
     @State private var onboardingVM: OnboardingViewModel?
     @State private var meetingDetectionPanel = MeetingDetectionPanelController()
     @State private var appRecordingVM: RecordingViewModel?
+    @State private var showCrashRecovery = false
+    @State private var crashRecoveryMeetings: [Meeting] = []
     private let updaterController = SPUStandardUpdaterController(startingUpdater: true, updaterDelegate: nil, userDriverDelegate: nil)
 
     init() {
@@ -73,6 +75,27 @@ struct ClioApp: App {
                     services.calendar.refreshUpcomingMeetings()
                     services.calendar.startRefreshTimer()
                 }
+
+                // Request notification permission
+                services.notifications.requestPermission()
+
+                // Check for crash recovery (orphaned recordings)
+                let orphaned = services.recovery.findOrphanedRecordings(in: modelContainer.mainContext)
+                if !orphaned.isEmpty {
+                    crashRecoveryMeetings = orphaned
+                    showCrashRecovery = true
+                    services.notifications.sendCrashRecovered(meetingCount: orphaned.count)
+                }
+            }
+            .sheet(isPresented: $showCrashRecovery) {
+                CrashRecoveryView(
+                    meetings: crashRecoveryMeetings,
+                    recovery: services.recovery,
+                    onDismiss: {
+                        showCrashRecovery = false
+                        crashRecoveryMeetings = []
+                    }
+                )
             }
         }
         .modelContainer(modelContainer)

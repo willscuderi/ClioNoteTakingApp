@@ -26,8 +26,13 @@ final class FloatingPanel<Content: View>: NSPanel {
     }
 
     func show() {
-        // Position near top-right of main screen
-        if let screen = NSScreen.main {
+        // Position near top-right of the screen containing the mouse cursor.
+        // Falls back to the primary screen if no match (e.g. cursor between screens).
+        let mouseLocation = NSEvent.mouseLocation
+        let targetScreen = NSScreen.screens.first { $0.frame.contains(mouseLocation) }
+            ?? NSScreen.main
+
+        if let screen = targetScreen {
             let screenFrame = screen.visibleFrame
             let panelFrame = frame
             let x = screenFrame.maxX - panelFrame.width - 16

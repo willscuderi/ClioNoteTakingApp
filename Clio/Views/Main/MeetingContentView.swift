@@ -14,7 +14,9 @@ struct MeetingContentView: View {
     @Bindable var detailVM: MeetingDetailViewModel
     @Bindable var transcriptVM: TranscriptViewModel
     @Environment(\.modelContext) private var modelContext
+    @Environment(ServiceContainer.self) private var services
     @State private var selectedTab: MeetingContentTab = .transcript
+    @State private var chatVM: MeetingChatViewModel?
 
     var body: some View {
         // Show split view during active recording
@@ -43,6 +45,7 @@ struct MeetingContentView: View {
             .padding(.horizontal, 24)
             .padding(.top, 20)
             .padding(.bottom, 12)
+            .background(Color(nsColor: .windowBackgroundColor))
 
             Divider()
 
@@ -103,6 +106,16 @@ struct MeetingContentView: View {
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+            // MARK: - Per-Meeting Chat Bar
+            if meeting.status == .completed, let chatVM {
+                MeetingChatBar(viewModel: chatVM, meeting: meeting)
+            }
+        }
+        .onAppear {
+            if chatVM == nil {
+                chatVM = MeetingChatViewModel(services: services)
+            }
         }
         .alert("Something went wrong", isPresented: Binding(
             get: { detailVM.errorMessage != nil },

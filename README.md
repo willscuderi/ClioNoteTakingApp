@@ -4,7 +4,7 @@ Clio is a native macOS app that transcribes your meetings in real time and gener
 
 ## Download
 
-**[Download Clio v0.1.0](https://github.com/willscuderi/ClioNoteTakingApp/releases/latest)** — Unzip and drag to Applications. No Xcode required.
+**[Download Clio v0.2.0](https://github.com/willscuderi/ClioNoteTakingApp/releases/latest)** — Unzip and drag to Applications. No Xcode required.
 
 > **Note:** This build is ad-hoc signed (not notarised). On first launch, right-click the app and choose **Open** to bypass Gatekeeper.
 
@@ -12,18 +12,22 @@ Clio auto-updates via [Sparkle](https://sparkle-project.org/) — once installed
 
 ## Features
 
-- **Real-time transcription** — Captures system audio and microphone simultaneously, transcribes live using local [whisper.cpp](https://github.com/ggml-org/whisper.cpp) or OpenAI Whisper API
+- **Real-time transcription** — Captures system audio and microphone simultaneously, transcribes live using local [whisper.cpp](https://github.com/ggml-org/whisper.cpp), OpenAI Whisper API, or AssemblyAI
+- **Speaker diarization** — Identifies different speakers in recordings using [AssemblyAI](https://www.assemblyai.com). Ideal for podcasts, interviews, and multi-participant meetings. Speakers are labelled (Speaker A, Speaker B, etc.) with colour-coded transcript segments
+- **Per-meeting AI chat** — Ask questions about a specific meeting directly from the meeting detail view. An inline chat bar at the bottom of each completed meeting lets you query its transcript and summary
 - **AI-powered notes** — Generates summaries, key decisions, and action items via OpenAI, Claude, Gemini, or local Ollama models
 - **Streaming summaries** — AI-generated summaries stream in progressively as they're written, so you can start reading immediately
-- **AI Search ("Ask AI")** — Ask natural-language questions about your meetings and get answers sourced from transcripts and summaries. Works across all meetings or scoped to a single meeting
+- **Unified search bar** — A single search bar in the toolbar toggles between keyword search (filters meeting list in real time) and AI search (asks questions across all your meetings)
 - **Smart meeting detection** — Detects when you join a Zoom, Teams, Meet, or Webex call by monitoring microphone activity (not just app launch), and prompts you to start recording with a floating overlay
 - **Calendar integration** — Reads upcoming meetings from macOS Calendar (Google, Outlook, iCloud) and shows them in the sidebar
-- **Multiple export options** — Export notes to Apple Notes, Notion, Obsidian, OneNote, or Markdown files. Notion exports include a direct link to open the page
+- **Crash recovery** — If Clio or your Mac restarts unexpectedly during a recording, the meeting is automatically recovered on next launch with all segments intact
+- **Multiple export options** — Export notes to Apple Notes, Notion, Obsidian, OneNote, or Markdown files. Notion exports include a direct link to open the page, with automatic retry on transient errors
 - **Markdown notes editor** — Rich formatting toolbar with headings, bold, italic, bullet lists, and checkboxes for meeting notes
 - **Folder organisation** — Group and organise meeting recordings into folders with drag-and-drop support
 - **Menu bar app** — Quick-access recording controls from the menu bar
 - **Bookmarks** — Mark key moments during a meeting for quick reference
 - **Global hotkeys** — Start/stop recording and create bookmarks from anywhere
+- **Audio watchdog** — Monitors the audio pipeline during recording and warns you if no audio is detected for more than 10 seconds
 - **Auto-updates** — Checks for new versions daily via Sparkle
 
 ## Requirements
@@ -48,6 +52,7 @@ ollama pull llama3.2
 | OpenAI | API key — used for GPT summarisation and/or Whisper transcription |
 | Anthropic (Claude) | API key — used for summarisation and AI Search |
 | Google (Gemini) | API key — used for summarisation and AI Search |
+| AssemblyAI | API key — used for transcription with speaker diarization |
 | Ollama | Local install — free, no API key needed. Clio can install it for you |
 
 ## Export Destinations
@@ -113,16 +118,17 @@ Clio/
 │   ├── Calendar/        # EventKit integration, meeting app detection
 │   ├── Export/          # Markdown, Apple Notes, Notion, Obsidian, OneNote exporters
 │   ├── LLM/            # OpenAI, Claude, Gemini, Ollama providers + streaming
-│   ├── Transcription/  # Local whisper.cpp + OpenAI Whisper API
+│   ├── Transcription/  # Local whisper.cpp, OpenAI Whisper API, AssemblyAI (diarization)
+│   ├── Recovery/       # Crash recovery service
 │   └── Protocols/      # Service protocol definitions
-├── ViewModels/          # MVVM view models (Recording, MeetingDetail, AISearch, Transcript)
+├── ViewModels/          # MVVM view models (Recording, MeetingDetail, AISearch, MeetingChat, Transcript)
 ├── Views/
 │   ├── Main/           # Sidebar, content, transcript/summary/notes tabs, AI Search
 │   ├── Recording/      # Floating indicators, meeting detection panel
 │   ├── MenuBar/        # Menu bar extra
 │   ├── Settings/       # Preferences (API keys, audio, general)
 │   ├── Onboarding/     # First-launch setup with Ollama install
-│   └── Components/     # Reusable UI (ProviderModelButton, MarkdownNotesEditor)
+│   └── Components/     # Reusable UI (ProviderModelButton, MeetingChatBar, UnifiedSearchBar, MarkdownNotesEditor)
 ├── Utilities/          # ServiceContainer (DI), helpers
 └── Resources/          # Whisper model, assets
 ```

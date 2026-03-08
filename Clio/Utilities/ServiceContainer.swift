@@ -14,6 +14,8 @@ final class ServiceContainer {
     let meetingDetector: MeetingAppDetector
     let audioDevices: AudioDeviceManager
     let backup: BackupService
+    let recovery: CrashRecoveryService
+    let notifications: NotificationService
 
     init(
         audioCapture: AudioCaptureServiceProtocol,
@@ -25,7 +27,9 @@ final class ServiceContainer {
         calendar: CalendarService,
         meetingDetector: MeetingAppDetector,
         audioDevices: AudioDeviceManager,
-        backup: BackupService
+        backup: BackupService,
+        recovery: CrashRecoveryService,
+        notifications: NotificationService
     ) {
         self.audioCapture = audioCapture
         self.transcription = transcription
@@ -37,12 +41,15 @@ final class ServiceContainer {
         self.meetingDetector = meetingDetector
         self.audioDevices = audioDevices
         self.backup = backup
+        self.recovery = recovery
+        self.notifications = notifications
     }
 
     static func makeDefault() -> ServiceContainer {
         let keychain = KeychainService()
         let local = LocalTranscriptionService()
         let api = APITranscriptionService(keychain: keychain)
+        let assemblyAI = AssemblyAITranscriptionService(keychain: keychain)
         let openAI = OpenAIService(keychain: keychain)
         let claude = ClaudeService(keychain: keychain)
         let gemini = GeminiService(keychain: keychain)
@@ -51,7 +58,7 @@ final class ServiceContainer {
 
         return ServiceContainer(
             audioCapture: AudioCaptureCoordinator(),
-            transcription: TranscriptionCoordinator(local: local, api: api),
+            transcription: TranscriptionCoordinator(local: local, api: api, assemblyAI: assemblyAI),
             llm: LLMCoordinator(openAI: openAI, claude: claude, gemini: gemini, ollama: ollama),
             export: ExportCoordinator(
                 markdown: MarkdownExportService(),
@@ -63,7 +70,9 @@ final class ServiceContainer {
             calendar: CalendarService(),
             meetingDetector: MeetingAppDetector(),
             audioDevices: audioDevices,
-            backup: BackupService()
+            backup: BackupService(),
+            recovery: CrashRecoveryService(),
+            notifications: NotificationService()
         )
     }
 }

@@ -72,6 +72,50 @@ final class MeetingAppDetector {
     /// Tracks the frontmost app when the mic first activated (before debounce)
     private var frontmostAppAtMicActivation: String?
 
+    /// Tracks extended mic sessions for unrecognized apps
+    private var extendedMicTask: Task<Void, Never>?
+
+    // MARK: - Detection Log File
+
+    private static let logDirectory: URL = {
+        let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
+        return appSupport
+            .appendingPathComponent("com.willscuderi.Clio", isDirectory: true)
+            .appendingPathComponent("Logs", isDirectory: true)
+    }()
+
+    private static let logFileURL: URL = logDirectory.appendingPathComponent("detection.log")
+
+    /// Append a timestamped entry to the detection log file.
+    nonisolated private func logDetection(_ message: String) {
+        let timestamp = ISO8601DateFormatter().string(from: Date())
+        let line = "[\(timestamp)] \(message)\n"
+
+        // Ensure directory exists (no-op if already present)
+        try? FileManager.default.createDirectory(at: Self.logDirectory, withIntermediateDirectories: true)
+
+        // Rotate if >1MB
+        if let attrs = try? FileManager.default.attributesOfItem(atPath: Self.logFileURL.path),
+           let size = attrs[.size] as? UInt64, size > 1_000_000 {
+            let rotatedURL = Self.logDirectory.appendingPathComponent("detection.log.1")
+            try? FileManager.default.removeItem(at: rotatedURL)
+            try? FileManager.default.moveItem(at: Self.logFileURL, to: rotatedURL)
+        }
+
+        // Append
+        if let data = line.data(using: .utf8) {
+            if FileManager.default.fileExists(atPath: Self.logFileURL.path) {
+                if let handle = try? FileHandle(forWritingTo: Self.logFileURL) {
+                    handle.seekToEndOfFile()
+                    handle.write(data)
+                    handle.closeFile()
+                }
+            } else {
+                try? data.write(to: Self.logFileURL, options: .atomic)
+            }
+        }
+    }
+
     // MARK: - Start / Stop
 
     func startMonitoring() {
@@ -117,6 +161,7 @@ final class MeetingAppDetector {
     }
 
     func dismissPrompt() {
+        logDetection("[DETECT] User dismissed prompt for \(detectedMeetingApp ?? "unknown")")
         dismissedPromptForApp = detectedMeetingApp
         shouldPromptRecording = false
         detectedMeetingApp = nil
@@ -230,6 +275,7 @@ final class MeetingAppDetector {
         guard status == noErr, deviceID != kAudioObjectUnknown else { return }
         micDeviceID = deviceID
         installMicListener()
+        logDetection("[DETECT] Default input device changed to \(deviceID)")
         logger.info("Default input device changed, now monitoring: \(deviceID)")
     }
 
@@ -244,6 +290,8 @@ final class MeetingAppDetector {
             // Mic stopped — meeting likely ended
             micCheckTask?.cancel()
             micCheckTask = nil
+            extendedMicTask?.cancel()
+            extendedMicTask = nil
 
             if shouldPromptRecording {
                 // Meeting ended while prompt was showing, dismiss it
@@ -254,6 +302,7 @@ final class MeetingAppDetector {
             dismissedPromptForApp = nil
             frontmostAppAtMicActivation = nil
 
+            logDetection("[DETECT] Mic became inactive, resetting")
             logger.info("Mic became inactive — resetting meeting detection")
         }
     }
@@ -264,6 +313,7 @@ final class MeetingAppDetector {
 
         // Snapshot the frontmost app right now (before debounce delay)
         frontmostAppAtMicActivation = NSWorkspace.shared.frontmostApplication?.bundleIdentifier
+        logDetection("[DETECT] Mic became active, frontmost: \(frontmostAppAtMicActivation ?? "none")")
 
         // Debounce: wait 3 seconds to confirm mic is sustained (not a brief blip)
         micCheckTask?.cancel()
@@ -274,6 +324,7 @@ final class MeetingAppDetector {
 
             // Still active after 3 seconds? Check for meeting app.
             guard self.isMicActiveOnDefaultDevice(), !self.isRecordingInClio else { return }
+            self.logDetection("[DETECT] Debounce passed, checking apps...")
             self.detectActiveMeeting()
         }
     }
@@ -297,6 +348,7 @@ final class MeetingAppDetector {
 
                 detectedMeetingApp = appName
                 shouldPromptRecording = true
+                logDetection("[DETECT] Meeting detected: \(appName)")
                 logger.info("Meeting detected: \(appName) is frontmost with mic active")
                 return
             }
@@ -310,12 +362,24 @@ final class MeetingAppDetector {
 
                 detectedMeetingApp = appName
                 shouldPromptRecording = true
+                logDetection("[DETECT] Browser-based meeting detected: \(bundleID)")
                 logger.info("Browser-based meeting detected: \(bundleID) is frontmost with mic active")
                 return
             }
         }
 
+        let candidateStr = candidates.joined(separator: ", ")
+        logDetection("[DETECT] Ignored: frontmost app not a meeting app (\(candidateStr))")
         logger.info("Mic active but frontmost app is not a meeting app — ignoring")
+
+        // Fallback: if mic stays active for >60s without a known app, log for debugging
+        extendedMicTask?.cancel()
+        extendedMicTask = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(60))
+            guard !Task.isCancelled else { return }
+            guard let self, self.isMicActiveOnDefaultDevice() else { return }
+            self.logDetection("[DETECT] Unrecognized audio session >60s, frontmost: \(NSWorkspace.shared.frontmostApplication?.bundleIdentifier ?? "none")")
+        }
     }
 
     // MARK: - CoreAudio Helpers

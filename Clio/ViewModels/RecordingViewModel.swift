@@ -22,6 +22,7 @@ final class RecordingViewModel {
     private var timerTask: Task<Void, Never>?
     private var audioLevelTask: Task<Void, Never>?
     private var transcriptionTask: Task<Void, Never>?
+    private var watchdogTask: Task<Void, Never>?
     private var cancellables = Set<AnyCancellable>()
     private let logger = Logger.audio
 
@@ -29,6 +30,11 @@ final class RecordingViewModel {
     private var transcribedSeconds: Double = 0
     private var micTranscribedSeconds: Double = 0
     private var systemTranscribedSeconds: Double = 0
+
+    /// Tracks when the last audio chunk was received (for watchdog)
+    private var lastAudioChunkTime: Date = Date()
+    /// Whether the audio warning has been shown (to avoid spamming)
+    private var audioWarningShown = false
 
     init(services: ServiceContainer) {
         self.services = services
@@ -70,9 +76,19 @@ final class RecordingViewModel {
             transcriptionStatus = "Waiting for audio..."
             errorMessage = nil
 
+            lastAudioChunkTime = Date()
+            audioWarningShown = false
+
             startTimer()
             startAudioLevelPolling()
             startTranscriptionPipeline(context: context)
+            startWatchdog()
+
+            // Crash recovery: start checkpointing
+            services.recovery.startCheckpointing(meeting: meeting, audioSource: source.rawValue)
+
+            // System notification
+            services.notifications.sendRecordingStarted(title: meeting.title)
 
             logger.info("Recording started: \(meeting.title)")
         } catch {
@@ -132,6 +148,10 @@ final class RecordingViewModel {
         do {
             stopAudioLevelPolling()
             stopTimer()
+            stopWatchdog()
+
+            // Stop crash recovery checkpointing
+            services.recovery.stopCheckpointing()
 
             // Flush remaining audio BEFORE disconnecting the transcription subscribers.
             // stopCapture() calls bufferManager.flush() which emits any partial chunk,
@@ -156,6 +176,15 @@ final class RecordingViewModel {
                 // Build raw transcript from segments
                 meeting.rawTranscript = meeting.fullTranscript
                 try? context.save()
+
+                // Clean up recovery file (clean stop)
+                services.recovery.deleteRecoveryFile(for: meeting)
+
+                // System notification
+                services.notifications.sendRecordingStopped(
+                    title: meeting.title,
+                    duration: elapsedTime.durationFormatted
+                )
 
                 // Auto-save markdown to local MeetingNotes folder
                 services.export.autoSaveMeetingNotes(meeting: meeting)
@@ -240,6 +269,34 @@ final class RecordingViewModel {
         audioLevel = 0
     }
 
+    // MARK: - Audio Watchdog
+
+    /// Monitors for audio pipeline stalls — warns if no audio chunks arrive for >10 seconds.
+    private func startWatchdog() {
+        watchdogTask = Task { [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(5))
+                guard !Task.isCancelled else { break }
+                guard let self, self.isRecording, !self.isPaused else { continue }
+
+                let silenceDuration = Date().timeIntervalSince(self.lastAudioChunkTime)
+                if silenceDuration > 10 && !self.audioWarningShown {
+                    self.audioWarningShown = true
+                    self.transcriptionStatus = "⚠️ No audio detected for \(Int(silenceDuration))s — check your microphone"
+                    self.services.notifications.sendAudioWarning(
+                        message: "Clio may have lost audio input. Check your microphone."
+                    )
+                    self.logger.warning("Audio watchdog: no chunks for \(Int(silenceDuration))s")
+                }
+            }
+        }
+    }
+
+    private func stopWatchdog() {
+        watchdogTask?.cancel()
+        watchdogTask = nil
+    }
+
     // MARK: - Transcription Pipeline
 
     /// Connect audio buffer chunks to transcription service
@@ -295,6 +352,10 @@ final class RecordingViewModel {
     private func transcribeChunk(_ buffer: AVAudioPCMBuffer, context: ModelContext, speakerLabel: String?) async {
         guard let meeting = currentMeeting else { return }
 
+        // Update watchdog — we got audio
+        lastAudioChunkTime = Date()
+        audioWarningShown = false
+
         let chunkDuration = Double(buffer.frameLength) / buffer.format.sampleRate
         let channelTag = speakerLabel.map { "[\($0)] " } ?? ""
         logger.info("\(channelTag)Processing audio chunk: \(String(format: "%.1f", chunkDuration))s, frames: \(buffer.frameLength)")
@@ -302,21 +363,54 @@ final class RecordingViewModel {
         do {
             transcriptionStatus = "Transcribing..."
 
-            if let segment = try await services.transcription.transcribeBuffer(buffer) {
-                // Use elapsed time for ordering (so mic and system segments interleave correctly)
-                segment.startTime = elapsedTime - chunkDuration
-                segment.endTime = elapsedTime
-                segment.speakerLabel = speakerLabel
-                segment.meeting = meeting
-                meeting.segments.append(segment)
-                context.insert(segment)
-                try? context.save()
-                segmentCount += 1
-                transcriptionStatus = "\(segmentCount) segment\(segmentCount == 1 ? "" : "s") transcribed"
-                logger.info("\(channelTag)Transcribed segment \(self.segmentCount): \(segment.text.prefix(60))")
+            // Use diarization path for AssemblyAI (returns multiple speaker-labeled segments)
+            if let coordinator = services.transcription as? TranscriptionCoordinator,
+               coordinator.preferredSource == .assemblyAI {
+                let segments = try await coordinator.transcribeBufferWithDiarization(buffer)
+                if segments.isEmpty {
+                    transcriptionStatus = "Listening... (no speech detected)"
+                    logger.info("\(channelTag)No speech detected in chunk")
+                } else {
+                    let chunkStartTime = elapsedTime - chunkDuration
+                    for segment in segments {
+                        // Adjust timestamps relative to recording session
+                        let relativeStart = segment.startTime // Already in seconds from AssemblyAI
+                        let relativeEnd = segment.endTime
+                        segment.startTime = chunkStartTime + relativeStart
+                        segment.endTime = chunkStartTime + relativeEnd
+                        // Don't override speakerLabel — AssemblyAI already set "Speaker A" etc.
+                        segment.meeting = meeting
+                        meeting.segments.append(segment)
+                        context.insert(segment)
+                        segmentCount += 1
+                        logger.info("[\(segment.speakerLabel ?? "?")] Transcribed segment \(self.segmentCount): \(segment.text.prefix(60))")
+                    }
+                    try? context.save()
+                    transcriptionStatus = "\(segmentCount) segment\(segmentCount == 1 ? "" : "s") transcribed"
+                    services.recovery.updateCheckpoint(elapsedTime: elapsedTime, segmentCount: segmentCount)
+                }
             } else {
-                transcriptionStatus = "Listening... (no speech detected)"
-                logger.info("\(channelTag)No speech detected in chunk")
+                // Standard single-segment path for local/OpenAI
+                if let segment = try await services.transcription.transcribeBuffer(buffer) {
+                    // Use elapsed time for ordering (so mic and system segments interleave correctly)
+                    segment.startTime = elapsedTime - chunkDuration
+                    segment.endTime = elapsedTime
+                    segment.speakerLabel = speakerLabel
+                    segment.meeting = meeting
+                    meeting.segments.append(segment)
+                    context.insert(segment)
+                    try? context.save()
+                    segmentCount += 1
+                    transcriptionStatus = "\(segmentCount) segment\(segmentCount == 1 ? "" : "s") transcribed"
+
+                    // Update crash recovery checkpoint
+                    services.recovery.updateCheckpoint(elapsedTime: elapsedTime, segmentCount: segmentCount)
+
+                    logger.info("\(channelTag)Transcribed segment \(self.segmentCount): \(segment.text.prefix(60))")
+                } else {
+                    transcriptionStatus = "Listening... (no speech detected)"
+                    logger.info("\(channelTag)No speech detected in chunk")
+                }
             }
 
             // Advance per-channel counters

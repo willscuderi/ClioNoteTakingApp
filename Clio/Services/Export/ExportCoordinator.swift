@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 import os
 
@@ -21,27 +22,71 @@ final class ExportCoordinator: ExportServiceProtocol {
         self.oneNote = oneNote
     }
 
+    // MARK: - Clipboard Fallback
+
+    /// Copy meeting notes to clipboard as a safety net when exports fail.
+    func copyToClipboard(meeting: Meeting) {
+        let content = buildMarkdownContent(meeting: meeting)
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(content, forType: .string)
+        logger.info("Meeting notes copied to clipboard as fallback")
+    }
+
+    // MARK: - Exports with Clipboard Fallback
+
     func exportMarkdown(meeting: Meeting) throws -> URL {
         try markdown.export(meeting: meeting)
     }
 
     func exportToAppleNotes(meeting: Meeting) async throws {
-        try await appleNotes.export(meeting: meeting)
+        do {
+            try await appleNotes.export(meeting: meeting)
+        } catch {
+            copyToClipboard(meeting: meeting)
+            logger.error("Apple Notes export failed, copied to clipboard: \(error.localizedDescription)")
+            throw ExportError.appleScriptError(
+                "Apple Notes export failed. Meeting notes copied to clipboard. \(error.localizedDescription)"
+            )
+        }
     }
 
     @discardableResult
     func exportToNotion(meeting: Meeting, apiKey: String) async throws -> String {
-        try await notion.export(meeting: meeting, apiKey: apiKey.isEmpty ? nil : apiKey)
+        do {
+            return try await notion.export(meeting: meeting, apiKey: apiKey.isEmpty ? nil : apiKey)
+        } catch {
+            copyToClipboard(meeting: meeting)
+            logger.error("Notion export failed, copied to clipboard: \(error.localizedDescription)")
+            throw ExportError.networkError(
+                "Notion export failed. Meeting notes copied to clipboard. \(error.localizedDescription)"
+            )
+        }
     }
 
     func exportToObsidian(meeting: Meeting) throws {
         let content = buildMarkdownContent(meeting: meeting)
-        try obsidian.export(meeting: meeting, markdownContent: content)
+        do {
+            try obsidian.export(meeting: meeting, markdownContent: content)
+        } catch {
+            copyToClipboard(meeting: meeting)
+            logger.error("Obsidian export failed, copied to clipboard: \(error.localizedDescription)")
+            throw ExportError.fileWriteFailed(
+                "Obsidian export failed. Meeting notes copied to clipboard. \(error.localizedDescription)"
+            )
+        }
     }
 
     func exportToOneNote(meeting: Meeting) throws {
         let content = buildMarkdownContent(meeting: meeting)
-        try oneNote.export(meeting: meeting, markdownContent: content)
+        do {
+            try oneNote.export(meeting: meeting, markdownContent: content)
+        } catch {
+            copyToClipboard(meeting: meeting)
+            logger.error("OneNote export failed, copied to clipboard: \(error.localizedDescription)")
+            throw ExportError.fileWriteFailed(
+                "OneNote export failed. Meeting notes copied to clipboard. \(error.localizedDescription)"
+            )
+        }
     }
 
     func testNotionConnection(apiKey: String?) async -> (success: Bool, message: String) {

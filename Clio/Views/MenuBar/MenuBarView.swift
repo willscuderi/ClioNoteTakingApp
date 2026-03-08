@@ -109,6 +109,7 @@ struct MenuBarView: View {
         }
         .padding(8)
         .frame(width: 240)
+        .background(Color(nsColor: .controlBackgroundColor))
         .onAppear {
             recordingVM = RecordingViewModel(services: services)
         }
