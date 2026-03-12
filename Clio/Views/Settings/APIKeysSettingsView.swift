@@ -128,6 +128,7 @@ struct APIKeysSettingsView: View {
 
     private func bindingForProvider(_ provider: LLMProvider) -> Binding<String> {
         switch provider {
+        case .clioPro: .constant("")
         case .openai: $viewModel.openAIKey
         case .claude: $viewModel.claudeKey
         case .gemini: $viewModel.geminiKey
@@ -138,6 +139,7 @@ struct APIKeysSettingsView: View {
 
     private func isConfigured(_ provider: LLMProvider) -> Bool {
         switch provider {
+        case .clioPro: true
         case .openai: !viewModel.openAIKey.isEmpty
         case .claude: !viewModel.claudeKey.isEmpty
         case .gemini: !viewModel.geminiKey.isEmpty

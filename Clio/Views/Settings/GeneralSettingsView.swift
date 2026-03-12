@@ -34,21 +34,32 @@ struct GeneralSettingsView: View {
                     preferredLLMModelID = newValue.defaultModel.id
                 }
 
-                Picker("Model", selection: $preferredLLMModelID) {
-                    ForEach(currentProvider.availableModels) { model in
-                        HStack {
-                            Text(model.displayName)
-                            Text(model.tierLabel)
-                                .foregroundStyle(.secondary)
-                        }
-                        .tag(model.id)
+                if currentProvider == .clioPro {
+                    HStack(spacing: 6) {
+                        Image(systemName: "crown.fill")
+                            .foregroundStyle(.orange)
+                            .font(.system(size: 12))
+                        Text("Powered by Gemini 2.0 Flash. No API key needed.")
+                            .font(.system(size: 12))
+                            .foregroundStyle(.secondary)
                     }
-                }
-                .onChange(of: preferredLLMModelID) { _, _ in
-                    // Ensure the model stays in sync
-                }
+                } else {
+                    Picker("Model", selection: $preferredLLMModelID) {
+                        ForEach(currentProvider.availableModels) { model in
+                            HStack {
+                                Text(model.displayName)
+                                Text(model.tierLabel)
+                                    .foregroundStyle(.secondary)
+                            }
+                            .tag(model.id)
+                        }
+                    }
+                    .onChange(of: preferredLLMModelID) { _, _ in
+                        // Ensure the model stays in sync
+                    }
 
-                ModelTierInfo(model: currentModel)
+                    ModelTierInfo(model: currentModel)
+                }
 
                 Picker("Transcription", selection: $viewModel.preferredTranscriptionSource) {
                     Text("Local (Whisper.cpp)").tag(TranscriptionSource.local)

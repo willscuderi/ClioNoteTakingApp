@@ -50,6 +50,7 @@ final class ServiceContainer {
         let local = LocalTranscriptionService()
         let api = APITranscriptionService(keychain: keychain)
         let assemblyAI = AssemblyAITranscriptionService(keychain: keychain)
+        let clioPro = ClioProService()
         let openAI = OpenAIService(keychain: keychain)
         let claude = ClaudeService(keychain: keychain)
         let gemini = GeminiService(keychain: keychain)
@@ -59,7 +60,7 @@ final class ServiceContainer {
         return ServiceContainer(
             audioCapture: AudioCaptureCoordinator(),
             transcription: TranscriptionCoordinator(local: local, api: api, assemblyAI: assemblyAI),
-            llm: LLMCoordinator(openAI: openAI, claude: claude, gemini: gemini, ollama: ollama),
+            llm: LLMCoordinator(clioPro: clioPro, openAI: openAI, claude: claude, gemini: gemini, ollama: ollama),
             export: ExportCoordinator(
                 markdown: MarkdownExportService(),
                 appleNotes: AppleNotesExportService(),

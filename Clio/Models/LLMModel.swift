@@ -37,6 +37,10 @@ extension LLMProvider {
     /// Available models for this provider, ordered fast -> balanced -> best.
     var availableModels: [LLMModel] {
         switch self {
+        case .clioPro:
+            [
+                LLMModel(id: "gemini-2.0-flash", displayName: "Gemini 2.0 Flash", provider: .clioPro, tier: .fast),
+            ]
         case .openai:
             [
                 LLMModel(id: "gpt-4o-mini", displayName: "GPT-4o Mini", provider: .openai, tier: .fast),
@@ -71,7 +75,7 @@ extension LLMProvider {
     /// Most providers default to balanced; Ollama defaults to fast (smaller download).
     var defaultModel: LLMModel {
         switch self {
-        case .ollama:
+        case .clioPro, .ollama:
             return availableModels.first(where: { $0.tier == .fast }) ?? availableModels[0]
         default:
             return availableModels.first(where: { $0.tier == .balanced }) ?? availableModels[0]

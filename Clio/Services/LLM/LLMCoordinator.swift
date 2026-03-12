@@ -3,12 +3,14 @@ import os
 
 final class LLMCoordinator: LLMServiceProtocol {
     private let logger = Logger(subsystem: "com.willscuderi.Clio", category: "LLMCoord")
+    private let clioPro: ClioProService
     private let openAI: OpenAIService
     private let claude: ClaudeService
     private let gemini: GeminiService
     private let ollama: OllamaService
 
-    init(openAI: OpenAIService, claude: ClaudeService, gemini: GeminiService, ollama: OllamaService) {
+    init(clioPro: ClioProService, openAI: OpenAIService, claude: ClaudeService, gemini: GeminiService, ollama: OllamaService) {
+        self.clioPro = clioPro
         self.openAI = openAI
         self.claude = claude
         self.gemini = gemini
@@ -19,6 +21,7 @@ final class LLMCoordinator: LLMServiceProtocol {
         let resolvedModel = model ?? provider.defaultModel
         logger.info("Summarizing with \(provider.rawValue) / \(resolvedModel.id)")
         switch provider {
+        case .clioPro: return try await clioPro.summarize(transcript: transcript, provider: provider, model: resolvedModel, systemPrompt: systemPrompt)
         case .openai: return try await openAI.summarize(transcript: transcript, provider: provider, model: resolvedModel, systemPrompt: systemPrompt)
         case .claude: return try await claude.summarize(transcript: transcript, provider: provider, model: resolvedModel, systemPrompt: systemPrompt)
         case .gemini: return try await gemini.summarize(transcript: transcript, provider: provider, model: resolvedModel, systemPrompt: systemPrompt)
@@ -33,6 +36,7 @@ final class LLMCoordinator: LLMServiceProtocol {
         let resolvedModel = model ?? provider.defaultModel
         logger.info("Streaming summary with \(provider.rawValue) / \(resolvedModel.id)")
         switch provider {
+        case .clioPro: return clioPro.summarizeStreaming(transcript: transcript, provider: provider, model: resolvedModel, systemPrompt: systemPrompt)
         case .openai: return openAI.summarizeStreaming(transcript: transcript, provider: provider, model: resolvedModel, systemPrompt: systemPrompt)
         case .claude: return claude.summarizeStreaming(transcript: transcript, provider: provider, model: resolvedModel, systemPrompt: systemPrompt)
         case .gemini: return gemini.summarizeStreaming(transcript: transcript, provider: provider, model: resolvedModel, systemPrompt: systemPrompt)
@@ -46,6 +50,7 @@ final class LLMCoordinator: LLMServiceProtocol {
         let resolvedModel = model ?? provider.defaultModel
         logger.info("Asking question with \(provider.rawValue) / \(resolvedModel.id)")
         switch provider {
+        case .clioPro: return try await clioPro.askQuestion(question: question, context: context, provider: provider, model: resolvedModel)
         case .openai: return try await openAI.askQuestion(question: question, context: context, provider: provider, model: resolvedModel)
         case .claude: return try await claude.askQuestion(question: question, context: context, provider: provider, model: resolvedModel)
         case .gemini: return try await gemini.askQuestion(question: question, context: context, provider: provider, model: resolvedModel)
@@ -58,6 +63,7 @@ final class LLMCoordinator: LLMServiceProtocol {
 
     func isConfigured(provider: LLMProvider) -> Bool {
         switch provider {
+        case .clioPro: clioPro.isConfigured(provider: provider)
         case .openai: openAI.isConfigured(provider: provider)
         case .claude: claude.isConfigured(provider: provider)
         case .gemini: gemini.isConfigured(provider: provider)

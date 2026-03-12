@@ -1,6 +1,7 @@
 import Foundation
 
 enum LLMProvider: String, Codable, CaseIterable, Identifiable {
+    case clioPro
     case openai
     case claude
     case gemini
@@ -11,6 +12,7 @@ enum LLMProvider: String, Codable, CaseIterable, Identifiable {
 
     var displayName: String {
         switch self {
+        case .clioPro: "Clio Pro"
         case .openai: "OpenAI"
         case .claude: "Claude"
         case .gemini: "Gemini"
@@ -21,6 +23,7 @@ enum LLMProvider: String, Codable, CaseIterable, Identifiable {
 
     var companyName: String {
         switch self {
+        case .clioPro: "Clio Pro (Gemini-powered)"
         case .openai: "OpenAI (ChatGPT)"
         case .claude: "Anthropic (Claude)"
         case .gemini: "Google (Gemini)"
@@ -31,6 +34,7 @@ enum LLMProvider: String, Codable, CaseIterable, Identifiable {
 
     var iconName: String {
         switch self {
+        case .clioPro: "crown.fill"
         case .openai: "brain"
         case .claude: "sparkle"
         case .gemini: "wand.and.stars"
@@ -44,11 +48,15 @@ enum LLMProvider: String, Codable, CaseIterable, Identifiable {
     }
 
     var requiresAPIKey: Bool {
-        self != .ollama
+        switch self {
+        case .clioPro, .ollama: false
+        default: true
+        }
     }
 
     var apiKeyPlaceholder: String {
         switch self {
+        case .clioPro: ""
         case .openai: "sk-..."
         case .claude: "sk-ant-..."
         case .gemini: "AIza..."
@@ -59,6 +67,7 @@ enum LLMProvider: String, Codable, CaseIterable, Identifiable {
 
     var getKeyURL: URL? {
         switch self {
+        case .clioPro: nil
         case .openai: URL(string: "https://platform.openai.com/api-keys")
         case .claude: URL(string: "https://console.anthropic.com/settings/keys")
         case .gemini: URL(string: "https://aistudio.google.com/apikey")
@@ -69,6 +78,12 @@ enum LLMProvider: String, Codable, CaseIterable, Identifiable {
 
     var setupSteps: [String] {
         switch self {
+        case .clioPro:
+            [
+                "Subscribe to Clio Pro ($4.99/month or $30/year)",
+                "That's it! Summaries are powered by Gemini 2.0",
+                "No API keys needed — we handle everything"
+            ]
         case .openai:
             [
                 "Click the link below to open OpenAI's API key page",
@@ -109,6 +124,7 @@ enum LLMProvider: String, Codable, CaseIterable, Identifiable {
 
     var signupURL: URL? {
         switch self {
+        case .clioPro: URL(string: "https://clionotes.com/#pricing")
         case .openai: URL(string: "https://platform.openai.com/signup")
         case .claude: URL(string: "https://console.anthropic.com/")
         case .gemini: URL(string: "https://aistudio.google.com/")
@@ -119,6 +135,7 @@ enum LLMProvider: String, Codable, CaseIterable, Identifiable {
 
     var getLinkLabel: String {
         switch self {
+        case .clioPro: "Learn about Clio Pro"
         case .openai: "Open OpenAI API Keys"
         case .claude: "Open Anthropic Console"
         case .gemini: "Open Google AI Studio"
