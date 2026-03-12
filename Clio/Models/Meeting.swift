@@ -20,6 +20,9 @@ final class Meeting {
     @Relationship(deleteRule: .cascade, inverse: \Bookmark.meeting)
     var bookmarks: [Bookmark]
 
+    @Relationship(deleteRule: .cascade, inverse: \ActionItem.meeting)
+    var actionItems: [ActionItem]
+
     var folder: MeetingFolder?
 
     init(
@@ -35,6 +38,7 @@ final class Meeting {
         self.durationSeconds = 0
         self.segments = []
         self.bookmarks = []
+        self.actionItems = []
     }
 
     var formattedDuration: String {

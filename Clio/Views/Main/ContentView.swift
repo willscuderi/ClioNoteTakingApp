@@ -20,6 +20,7 @@ struct ContentView: View {
     @State private var aiSearchVM: AISearchViewModel?
     @State private var showAISearch = false
     @State private var aiQuestionText = ""
+    @State private var showAnalytics = false
 
     /// Use the shared VM if provided, otherwise the locally-created one.
     private var activeRecordingVM: RecordingViewModel? {
@@ -56,7 +57,9 @@ struct ContentView: View {
                 isCreatingFolder: $isCreatingFolder
             )
         } detail: {
-            if selectedMeetingIDs.count > 1, let detailVM {
+            if showAnalytics {
+                AnalyticsView()
+            } else if selectedMeetingIDs.count > 1, let detailVM {
                 BulkSelectionView(
                     selectedMeetings: selectedMeetings,
                     detailVM: detailVM,
@@ -102,6 +105,16 @@ struct ContentView: View {
                     Label("New Folder", systemImage: "folder.badge.plus")
                 }
                 .help("Create a new folder")
+
+                Button {
+                    showAnalytics.toggle()
+                    if showAnalytics {
+                        selectedMeetingIDs.removeAll()
+                    }
+                } label: {
+                    Label("Analytics", systemImage: "chart.bar")
+                }
+                .help("Meeting Analytics")
 
                 // Export: selected meetings or all
                 Menu {
@@ -171,6 +184,11 @@ struct ContentView: View {
                 panelController.show(recordingVM: vm, modelContext: modelContext)
             } else {
                 panelController.hide()
+            }
+        }
+        .onChange(of: selectedMeetingIDs) { _, newValue in
+            if !newValue.isEmpty {
+                showAnalytics = false
             }
         }
         // Auto-open the recording meeting when recording starts

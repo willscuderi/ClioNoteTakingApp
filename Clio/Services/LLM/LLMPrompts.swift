@@ -12,10 +12,13 @@ enum LLMPrompts {
     Bullet points of the most important topics, decisions, and insights.
 
     ### Action Items
-    A checklist of follow-up tasks mentioned or implied, with owners if identifiable.
+    A checklist of follow-up tasks mentioned or implied, with owners if identifiable. Format each as: - [ ] **Owner:** Task description
 
     ### Decisions Made
     Any decisions that were reached during the meeting.
+
+    ### Bookmarked Moments
+    If the transcript contains [BOOKMARK: "label" at MM:SS] markers, include a section highlighting each bookmarked moment. For each bookmark, provide the timestamp, the bookmark label, and a brief summary of what was being discussed at that point. If there are no bookmark markers, omit this section entirely.
 
     Be concise but thorough. Use the speakers' own language where appropriate.
 

@@ -10,7 +10,7 @@ final class ClaudeService: LLMServiceProtocol {
         self.keychain = keychain
     }
 
-    func summarize(transcript: String, provider: LLMProvider, model: LLMModel? = nil) async throws -> String {
+    func summarize(transcript: String, provider: LLMProvider, model: LLMModel? = nil, systemPrompt: String? = nil) async throws -> String {
         guard provider == .claude else {
             throw LLMError.providerMismatch
         }
@@ -20,26 +20,7 @@ final class ClaudeService: LLMServiceProtocol {
         }
 
         let modelID = model?.id ?? provider.defaultModel.id
-
-        let systemPrompt = """
-        You are a meeting note assistant. Given a meeting transcript, produce a clear, concise summary in Markdown format. Include:
-
-        ## Meeting Summary
-        A 2-3 sentence overview of what was discussed.
-
-        ### Key Points
-        Bullet points of the most important topics, decisions, and insights.
-
-        ### Action Items
-        A checklist of follow-up tasks mentioned or implied, with owners if identifiable.
-
-        ### Decisions Made
-        Any decisions that were reached during the meeting.
-
-        Be concise but thorough. Use the speakers' own language where appropriate.
-
-        The transcript may include speaker labels like [You] and [Remote]. [You] is the person who recorded the meeting (the local user). [Remote] is audio from the other side of a call — it may contain multiple people. When speaker labels are present, attribute statements and action items to the correct speaker. If you can distinguish multiple remote participants by context or conversational cues, label them (e.g., "Remote Speaker 1", "Remote Speaker 2"). If unsure, use "Remote" as a group label.
-        """
+        let prompt = systemPrompt ?? LLMPrompts.summarySystem
 
         // Truncate transcript if too long
         let truncatedTranscript = String(transcript.prefix(80000))
@@ -47,7 +28,7 @@ final class ClaudeService: LLMServiceProtocol {
         let requestBody: [String: Any] = [
             "model": modelID,
             "max_tokens": 2000,
-            "system": systemPrompt,
+            "system": prompt,
             "messages": [
                 ["role": "user", "content": "Please summarize this meeting transcript:\n\n\(truncatedTranscript)"]
             ]
@@ -85,7 +66,7 @@ final class ClaudeService: LLMServiceProtocol {
         return textBlock.text
     }
 
-    func summarizeStreaming(transcript: String, provider: LLMProvider, model: LLMModel?) -> AsyncThrowingStream<String, Error> {
+    func summarizeStreaming(transcript: String, provider: LLMProvider, model: LLMModel?, systemPrompt: String? = nil) -> AsyncThrowingStream<String, Error> {
         AsyncThrowingStream { continuation in
             Task {
                 do {
@@ -94,12 +75,13 @@ final class ClaudeService: LLMServiceProtocol {
 
                     let modelID = model?.id ?? provider.defaultModel.id
                     let truncated = String(transcript.prefix(80000))
+                    let prompt = systemPrompt ?? LLMPrompts.summarySystem
 
                     let requestBody: [String: Any] = [
                         "model": modelID,
                         "max_tokens": 2000,
                         "stream": true,
-                        "system": LLMPrompts.summarySystem,
+                        "system": prompt,
                         "messages": [
                             ["role": "user", "content": "Please summarize this meeting transcript:\n\n\(truncated)"]
                         ]

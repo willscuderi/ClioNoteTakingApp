@@ -45,6 +45,29 @@ struct TranscriptionSettingsView: View {
                     .foregroundStyle(.secondary)
             }
 
+            Section("Transcription Accuracy") {
+                Picker("Accuracy", selection: $viewModel.transcriptionAccuracy) {
+                    ForEach(TranscriptionAccuracy.allCases, id: \.self) { accuracy in
+                        Text(accuracy.displayName).tag(accuracy)
+                    }
+                }
+                .pickerStyle(.radioGroup)
+
+                Text(viewModel.transcriptionAccuracy.description)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
+                if viewModel.transcriptionAccuracy == .maximum {
+                    Text("Overlap stitching retains 2 seconds of audio between chunks to prevent lost words at boundaries.")
+                        .font(.caption)
+                        .foregroundStyle(.tertiary)
+                }
+
+                Text("Accuracy settings apply to the local whisper.cpp engine only. Restart any active recording for changes to take effect.")
+                    .font(.caption)
+                    .foregroundStyle(.tertiary)
+            }
+
             Section("API Engine") {
                 LabeledContent("Provider") {
                     Text("OpenAI Whisper")

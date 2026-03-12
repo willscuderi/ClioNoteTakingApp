@@ -28,13 +28,13 @@ final class MeetingDetailViewModel {
         self.services = services
     }
 
-    func generateSummary(for meeting: Meeting, context: ModelContext) async {
+    func generateSummary(for meeting: Meeting, context: ModelContext, template: SummaryTemplate? = nil) async {
         guard !isGeneratingSummary else { return }
         isGeneratingSummary = true
         streamedSummary = ""
         errorMessage = nil
 
-        let transcript = meeting.fullTranscript
+        let transcript = buildEnrichedTranscript(for: meeting)
         guard !transcript.isEmpty else {
             errorMessage = "No transcript available to summarize"
             isGeneratingSummary = false
@@ -45,7 +45,8 @@ final class MeetingDetailViewModel {
             let stream = services.llm.summarizeStreaming(
                 transcript: transcript,
                 provider: selectedLLMProvider,
-                model: resolvedModel
+                model: resolvedModel,
+                systemPrompt: template?.systemPrompt
             )
 
             for try await chunk in stream {
@@ -53,12 +54,14 @@ final class MeetingDetailViewModel {
             }
 
             meeting.summary = streamedSummary
+            extractActionItems(from: streamedSummary, meeting: meeting, context: context)
             try? context.save()
             logger.info("Summary generated for: \(meeting.title)")
         } catch {
             // If we got partial content, still save it
             if !streamedSummary.isEmpty {
                 meeting.summary = streamedSummary
+                extractActionItems(from: streamedSummary, meeting: meeting, context: context)
                 try? context.save()
             }
             errorMessage = error.localizedDescription
@@ -66,6 +69,29 @@ final class MeetingDetailViewModel {
         }
 
         isGeneratingSummary = false
+    }
+
+    /// Parse action items from summary and save to SwiftData
+    private func extractActionItems(from summary: String, meeting: Meeting, context: ModelContext) {
+        // Clear existing action items for this meeting
+        for item in meeting.actionItems {
+            context.delete(item)
+        }
+        meeting.actionItems.removeAll()
+
+        let parsed = ActionItemParser.parse(summary)
+        for parsedItem in parsed {
+            let actionItem = ActionItem(
+                text: parsedItem.text,
+                owner: parsedItem.owner,
+                dueDate: parsedItem.dueDate,
+                isCompleted: parsedItem.isCompleted
+            )
+            actionItem.meeting = meeting
+            meeting.actionItems.append(actionItem)
+            context.insert(actionItem)
+        }
+        logger.info("Extracted \(parsed.count) action items from summary")
     }
 
     // MARK: - Single Meeting Export
@@ -239,6 +265,47 @@ final class MeetingDetailViewModel {
         } else {
             successMessage = "Exported \(succeeded) meetings to \(destination.rawValue)"
         }
+    }
+
+    // MARK: - Transcript Enrichment
+
+    /// Build transcript with bookmark markers injected at the correct positions.
+    private func buildEnrichedTranscript(for meeting: Meeting) -> String {
+        let sortedSegments = meeting.segments.sorted { $0.startTime < $1.startTime }
+        guard !sortedSegments.isEmpty else { return "" }
+
+        let sortedBookmarks = meeting.bookmarks.sorted { $0.timestamp < $1.timestamp }
+        guard !sortedBookmarks.isEmpty else { return meeting.fullTranscript }
+
+        var lines: [String] = []
+        var bookmarkIndex = 0
+
+        for segment in sortedSegments {
+            // Insert any bookmarks that fall before or within this segment
+            while bookmarkIndex < sortedBookmarks.count &&
+                  sortedBookmarks[bookmarkIndex].timestamp <= segment.endTime {
+                let bookmark = sortedBookmarks[bookmarkIndex]
+                let label = bookmark.label.isEmpty ? "Bookmark" : bookmark.label
+                lines.append("[BOOKMARK: \"\(label)\" at \(bookmark.formattedTimestamp)]")
+                bookmarkIndex += 1
+            }
+
+            if let speaker = segment.speakerLabel {
+                lines.append("[\(speaker)] \(segment.text)")
+            } else {
+                lines.append(segment.text)
+            }
+        }
+
+        // Any remaining bookmarks after the last segment
+        while bookmarkIndex < sortedBookmarks.count {
+            let bookmark = sortedBookmarks[bookmarkIndex]
+            let label = bookmark.label.isEmpty ? "Bookmark" : bookmark.label
+            lines.append("[BOOKMARK: \"\(label)\" at \(bookmark.formattedTimestamp)]")
+            bookmarkIndex += 1
+        }
+
+        return lines.joined(separator: "\n")
     }
 
     // MARK: - Helpers

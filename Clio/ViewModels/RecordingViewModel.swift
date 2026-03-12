@@ -225,6 +225,129 @@ final class RecordingViewModel {
         }
     }
 
+    // MARK: - Passive Listening (Rolling Buffer)
+
+    /// Whether the rolling buffer is actively collecting audio in the background.
+    var isPassiveListening: Bool {
+        (services.audioCapture as? AudioCaptureCoordinator)?.isPassiveListening ?? false
+    }
+
+    /// Available retroactive seconds from the rolling buffer.
+    var retroactiveSecondsAvailable: Double {
+        (services.audioCapture as? AudioCaptureCoordinator)?.rollingBuffer.availableSeconds ?? 0
+    }
+
+    /// Start passive listening if rolling buffer is enabled in settings and not already recording.
+    func startPassiveListeningIfEnabled() async {
+        guard !isRecording else { return }
+        guard UserDefaults.standard.bool(forKey: "enableRollingBuffer") else { return }
+        guard let coordinator = services.audioCapture as? AudioCaptureCoordinator else { return }
+        guard !coordinator.isPassiveListening else { return }
+
+        do {
+            try await coordinator.startPassiveListening()
+            logger.info("Passive listening started from ViewModel")
+        } catch {
+            logger.error("Failed to start passive listening: \(error.localizedDescription)")
+        }
+    }
+
+    /// Stop passive listening.
+    func stopPassiveListening() async {
+        guard let coordinator = services.audioCapture as? AudioCaptureCoordinator else { return }
+        guard coordinator.isPassiveListening else { return }
+
+        do {
+            try await coordinator.stopPassiveListening()
+            logger.info("Passive listening stopped from ViewModel")
+        } catch {
+            logger.error("Failed to stop passive listening: \(error.localizedDescription)")
+        }
+    }
+
+    /// Capture retroactive audio from the rolling buffer and start a normal recording.
+    /// The retroactive chunk is transcribed first, then normal recording continues.
+    func captureRetroactive(minutes: Int, context: ModelContext) async {
+        guard !isRecording else { return }
+        guard let coordinator = services.audioCapture as? AudioCaptureCoordinator else { return }
+
+        let effectiveSource = await resolveAudioSource()
+        guard let source = effectiveSource else {
+            errorMessage = "No audio permissions available."
+            return
+        }
+
+        do {
+            let meeting = Meeting(title: "Meeting \(Date().meetingDateFormatted)")
+            context.insert(meeting)
+            currentMeeting = meeting
+
+            // Set microphone device
+            coordinator.microphone.deviceID = services.audioDevices.selectedDeviceID
+
+            // Transition from passive listening to active recording
+            let retroBuffer = try await coordinator.transitionToActiveRecording(
+                retroactiveSeconds: minutes * 60,
+                source: source
+            )
+
+            audioSource = source
+            try await services.transcription.startTranscription()
+
+            isRecording = true
+            services.meetingDetector.isRecordingInClio = true
+            isPaused = false
+            transcribedSeconds = 0
+            micTranscribedSeconds = 0
+            systemTranscribedSeconds = 0
+            segmentCount = 0
+            errorMessage = nil
+
+            lastAudioChunkTime = Date()
+            audioWarningShown = false
+
+            // Transcribe retroactive audio first
+            if let retroBuffer {
+                let retroDuration = Double(retroBuffer.frameLength) / retroBuffer.format.sampleRate
+                elapsedTime = retroDuration
+                transcriptionStatus = "Transcribing retroactive audio..."
+                logger.info("Transcribing retroactive audio: \(String(format: "%.1f", retroDuration))s")
+
+                if let segment = try await services.transcription.transcribeBuffer(retroBuffer) {
+                    segment.startTime = 0
+                    segment.endTime = retroDuration
+                    segment.meeting = meeting
+                    meeting.segments.append(segment)
+                    context.insert(segment)
+                    try? context.save()
+                    segmentCount += 1
+                    logger.info("Retroactive segment transcribed: \(segment.text.prefix(80))")
+                }
+            } else {
+                elapsedTime = 0
+            }
+
+            transcriptionStatus = "Waiting for audio..."
+
+            startTimer()
+            startAudioLevelPolling()
+            startTranscriptionPipeline(context: context)
+            startWatchdog()
+
+            services.recovery.startCheckpointing(meeting: meeting, audioSource: source.rawValue)
+            services.notifications.sendRecordingStarted(title: meeting.title)
+
+            logger.info("Retroactive recording started: \(meeting.title) (retroactive: \(minutes) min)")
+        } catch {
+            if let meeting = currentMeeting {
+                context.delete(meeting)
+                currentMeeting = nil
+            }
+            errorMessage = "Failed to start retroactive recording: \(error.localizedDescription)"
+            logger.error("Retroactive recording failed: \(error.localizedDescription)")
+        }
+    }
+
     func addBookmark(context: ModelContext, label: String = "") {
         guard let meeting = currentMeeting else { return }
         let bookmark = Bookmark(label: label, timestamp: elapsedTime)

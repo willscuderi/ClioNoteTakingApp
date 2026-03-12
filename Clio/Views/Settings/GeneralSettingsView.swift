@@ -66,6 +66,23 @@ struct GeneralSettingsView: View {
                 Toggle("Export to Notion", isOn: $autoExportNotion)
             }
 
+            Section("Retroactive Recording") {
+                Toggle("Enable rolling buffer", isOn: $viewModel.enableRollingBuffer)
+
+                if viewModel.enableRollingBuffer {
+                    Picker("Buffer duration", selection: $viewModel.rollingBufferMinutes) {
+                        Text("1 minute").tag(1)
+                        Text("2 minutes").tag(2)
+                        Text("3 minutes").tag(3)
+                        Text("5 minutes").tag(5)
+                    }
+
+                    Text("Clio will passively listen to system audio in the background. When you start a recording, you can capture the last few minutes retroactively. Requires Screen Recording permission.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+
             Section("Data") {
                 LabeledContent("Storage Location") {
                     Text("~/Library/Application Support/com.willscuderi.Clio")

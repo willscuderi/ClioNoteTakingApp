@@ -30,7 +30,7 @@ actor WhisperContext {
     }
 
     /// Load the bundled model from the app's Resources/Models directory.
-    static func loadBundled(modelName: String = "ggml-base.en", useGPU: Bool = true) throws -> WhisperContext {
+    static func loadBundled(modelName: String = "ggml-base", useGPU: Bool = true) throws -> WhisperContext {
         // Look in the Models folder inside the bundle
         guard let modelURL = Bundle.main.url(forResource: modelName, withExtension: "bin", subdirectory: "Models") else {
             // Also try without subdirectory (flat bundle)
@@ -44,22 +44,37 @@ actor WhisperContext {
 
     /// Transcribe a buffer of 16kHz mono Float32 PCM samples.
     /// Returns an array of transcribed segments with timestamps.
-    func transcribe(samples: [Float], language: String = "en") throws -> [WhisperSegment] {
-        var params = whisper_full_default_params(WHISPER_SAMPLING_GREEDY)
+    /// - Parameters:
+    ///   - samples: 16kHz mono Float32 PCM audio samples
+    ///   - language: Language code or "auto" for auto-detection (default "auto")
+    ///   - useBeamSearch: Use beam search instead of greedy decoding for better accuracy
+    ///   - initialPrompt: Text from previous chunk for context continuity (helps with names, acronyms)
+    func transcribe(samples: [Float], language: String = "auto", useBeamSearch: Bool = false, initialPrompt: String? = nil) throws -> [WhisperSegment] {
+        let strategy = useBeamSearch ? WHISPER_SAMPLING_BEAM_SEARCH : WHISPER_SAMPLING_GREEDY
+        var params = whisper_full_default_params(strategy)
+
+        if useBeamSearch {
+            params.beam_search.beam_size = 5
+        }
 
         // Thread count: use most available cores but leave 2 free
         let maxThreads = max(1, min(8, ProcessInfo.processInfo.activeProcessorCount - 2))
         params.n_threads = Int32(maxThreads)
         params.language = (language as NSString).utf8String
         params.translate = false
-        params.no_context = true
+        params.no_context = (initialPrompt == nil) // Use context when we have a prompt
         params.single_segment = false
         params.print_special = false
         params.print_progress = false
         params.print_realtime = false
         params.print_timestamps = false
 
-        logger.debug("Transcribing \(samples.count) samples (\(String(format: "%.1f", Double(samples.count) / 16000.0))s)")
+        // Set initial prompt for context continuity across chunks
+        if let prompt = initialPrompt {
+            params.initial_prompt = (prompt as NSString).utf8String
+        }
+
+        logger.debug("Transcribing \(samples.count) samples (\(String(format: "%.1f", Double(samples.count) / 16000.0))s) beam=\(useBeamSearch) prompt=\(initialPrompt != nil)")
 
         let result = samples.withUnsafeBufferPointer { ptr in
             whisper_full(context, params, ptr.baseAddress, Int32(samples.count))

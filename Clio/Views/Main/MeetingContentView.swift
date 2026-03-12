@@ -4,6 +4,7 @@ import SwiftData
 enum MeetingContentTab: String, CaseIterable, Identifiable {
     case transcript = "Transcript"
     case summary = "Summary"
+    case actionItems = "Action Items"
     case notes = "Notes"
 
     var id: String { rawValue }
@@ -17,6 +18,7 @@ struct MeetingContentView: View {
     @Environment(ServiceContainer.self) private var services
     @State private var selectedTab: MeetingContentTab = .transcript
     @State private var chatVM: MeetingChatViewModel?
+    @State private var selectedTemplate: SummaryTemplate = SummaryTemplate.builtIn[0]
 
     var body: some View {
         // Show split view during active recording
@@ -69,7 +71,8 @@ struct MeetingContentView: View {
                         Task {
                             await detailVM.generateSummary(
                                 for: meeting,
-                                context: modelContext
+                                context: modelContext,
+                                template: selectedTemplate
                             )
                         }
                     } label: {
@@ -100,7 +103,9 @@ struct MeetingContentView: View {
                 case .transcript:
                     TranscriptTabView(meeting: meeting, viewModel: transcriptVM)
                 case .summary:
-                    SummaryTabView(meeting: meeting, isGenerating: detailVM.isGeneratingSummary, streamedSummary: detailVM.streamedSummary)
+                    SummaryTabView(meeting: meeting, isGenerating: detailVM.isGeneratingSummary, streamedSummary: detailVM.streamedSummary, selectedTemplate: $selectedTemplate)
+                case .actionItems:
+                    ActionItemsTabView(meeting: meeting)
                 case .notes:
                     NotesTabView(meeting: meeting)
                 }
@@ -148,6 +153,14 @@ struct MeetingContentView: View {
         }
         .toolbar {
             ToolbarItemGroup(placement: .secondaryAction) {
+                ShareLink(
+                    item: services.export.buildMarkdownContent(meeting: meeting),
+                    subject: Text(meeting.title),
+                    message: Text("Meeting notes from \(meeting.title)")
+                ) {
+                    Label("Share", systemImage: "square.and.arrow.up.on.square")
+                }
+
                 Menu {
                     Button {
                         detailVM.exportMarkdownWithSavePanel(meeting: meeting)

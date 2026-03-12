@@ -13,6 +13,21 @@ final class SettingsViewModel {
     var assemblyAIKey = ""
     var preferredTranscriptionSource: TranscriptionSource = .local
     var preferredLLMProvider: LLMProvider = .ollama
+    var transcriptionAccuracy: TranscriptionAccuracy = .balanced {
+        didSet {
+            UserDefaults.standard.set(transcriptionAccuracy.rawValue, forKey: "transcriptionAccuracy")
+        }
+    }
+    var enableRollingBuffer = false {
+        didSet {
+            UserDefaults.standard.set(enableRollingBuffer, forKey: "enableRollingBuffer")
+        }
+    }
+    var rollingBufferMinutes = 3 {
+        didSet {
+            UserDefaults.standard.set(rollingBufferMinutes, forKey: "rollingBufferMinutes")
+        }
+    }
     var errorMessage: String?
     var successMessage: String?
 
@@ -31,6 +46,10 @@ final class SettingsViewModel {
         notionKey = (try? keychain.loadAPIKey(for: "notion")) ?? ""
         deepgramKey = (try? keychain.loadAPIKey(for: "deepgram")) ?? ""
         assemblyAIKey = (try? keychain.loadAPIKey(for: "assemblyai")) ?? ""
+        transcriptionAccuracy = TranscriptionAccuracy(rawValue: UserDefaults.standard.string(forKey: "transcriptionAccuracy") ?? "") ?? .balanced
+        enableRollingBuffer = UserDefaults.standard.bool(forKey: "enableRollingBuffer")
+        rollingBufferMinutes = max(1, min(5, UserDefaults.standard.integer(forKey: "rollingBufferMinutes")))
+        if rollingBufferMinutes == 0 { rollingBufferMinutes = 3 }
     }
 
     /// Save a single key immediately when it changes.

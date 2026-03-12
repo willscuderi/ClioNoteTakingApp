@@ -142,7 +142,7 @@ final class OnboardingViewModel {
         modelDownloadProgress = 0
 
         // Check if model already exists in bundle
-        if Bundle.main.url(forResource: "ggml-base.en", withExtension: "bin") != nil {
+        if Bundle.main.url(forResource: "ggml-base", withExtension: "bin") != nil {
             modelDownloadProgress = 1.0
             modelDownloaded = true
             isDownloadingModel = false
@@ -156,7 +156,7 @@ final class OnboardingViewModel {
                 let modelsDir = appSupport.appendingPathComponent("com.willscuderi.Clio/Models", isDirectory: true)
                 try FileManager.default.createDirectory(at: modelsDir, withIntermediateDirectories: true)
 
-                let destination = modelsDir.appendingPathComponent("ggml-base.en.bin")
+                let destination = modelsDir.appendingPathComponent("ggml-base.bin")
 
                 // If already downloaded
                 if FileManager.default.fileExists(atPath: destination.path) {
@@ -166,7 +166,7 @@ final class OnboardingViewModel {
                     return
                 }
 
-                let url = URL(string: "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.en.bin")!
+                let url = URL(string: "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.bin")!
                 let (asyncBytes, response) = try await URLSession.shared.bytes(from: url)
 
                 let expectedLength = (response as? HTTPURLResponse)
@@ -324,12 +324,12 @@ final class OnboardingViewModel {
         checkPermissions()
 
         // Check if model is already bundled or downloaded
-        if Bundle.main.url(forResource: "ggml-base.en", withExtension: "bin") != nil {
+        if Bundle.main.url(forResource: "ggml-base", withExtension: "bin") != nil {
             modelDownloaded = true
             modelDownloadProgress = 1.0
         } else {
             let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
-            let modelPath = appSupport.appendingPathComponent("com.willscuderi.Clio/Models/ggml-base.en.bin")
+            let modelPath = appSupport.appendingPathComponent("com.willscuderi.Clio/Models/ggml-base.bin")
             if FileManager.default.fileExists(atPath: modelPath.path) {
                 modelDownloaded = true
                 modelDownloadProgress = 1.0

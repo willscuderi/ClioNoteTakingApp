@@ -15,7 +15,7 @@ struct ClioApp: App {
     private let updaterController = SPUStandardUpdaterController(startingUpdater: true, updaterDelegate: nil, userDriverDelegate: nil)
 
     init() {
-        let schema = Schema([Meeting.self, TranscriptSegment.self, Bookmark.self, MeetingFolder.self])
+        let schema = Schema([Meeting.self, TranscriptSegment.self, Bookmark.self, MeetingFolder.self, ActionItem.self])
 
         // Store data in Application Support to avoid sandbox collisions
         let appSupportURL = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
@@ -78,6 +78,11 @@ struct ClioApp: App {
 
                 // Request notification permission
                 services.notifications.requestPermission()
+
+                // Start passive listening (rolling buffer) if enabled
+                if let vm = appRecordingVM {
+                    Task { await vm.startPassiveListeningIfEnabled() }
+                }
 
                 // Check for crash recovery (orphaned recordings)
                 let orphaned = services.recovery.findOrphanedRecordings(in: modelContainer.mainContext)

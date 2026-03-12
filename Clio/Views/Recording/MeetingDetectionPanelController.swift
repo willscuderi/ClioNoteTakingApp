@@ -64,9 +64,15 @@ final class MeetingDetectionPanelController {
         let calendarTitle = services.calendar.meetingInProgress()?.title
             ?? services.calendar.meetingStartingSoon()?.title
 
+        let rollingBufferEnabled = UserDefaults.standard.bool(forKey: "enableRollingBuffer")
+        let rollingBufferMinutes = max(1, UserDefaults.standard.integer(forKey: "rollingBufferMinutes"))
+        let hasRetroactiveAudio = rollingBufferEnabled && recordingVM.isPassiveListening
+
         let content = MeetingDetectionOverlay(
             appName: appName,
             calendarMeetingTitle: calendarTitle,
+            showRetroactive: hasRetroactiveAudio,
+            retroactiveMinutes: rollingBufferMinutes,
             onRecord: { [weak self] in
                 Task {
                     await recordingVM.startRecording(context: modelContext)
@@ -74,14 +80,22 @@ final class MeetingDetectionPanelController {
                 services.meetingDetector.dismissPrompt()
                 self?.hide()
             },
+            onRetroactiveCapture: hasRetroactiveAudio ? { [weak self] in
+                Task {
+                    await recordingVM.captureRetroactive(minutes: rollingBufferMinutes, context: modelContext)
+                }
+                services.meetingDetector.dismissPrompt()
+                self?.hide()
+            } : nil,
             onDismiss: { [weak self] in
                 services.meetingDetector.dismissPrompt()
                 self?.hide()
             }
         )
 
+        let panelHeight = hasRetroactiveAudio ? 150.0 : 120.0
         let newPanel = FloatingPanel(
-            contentRect: NSRect(x: 0, y: 0, width: 320, height: 120),
+            contentRect: NSRect(x: 0, y: 0, width: 320, height: panelHeight),
             content: { AnyView(content) }
         )
         newPanel.show()
@@ -101,7 +115,10 @@ final class MeetingDetectionPanelController {
 private struct MeetingDetectionOverlay: View {
     let appName: String
     let calendarMeetingTitle: String?
+    var showRetroactive: Bool = false
+    var retroactiveMinutes: Int = 3
     let onRecord: () -> Void
+    var onRetroactiveCapture: (() -> Void)?
     let onDismiss: () -> Void
 
     var body: some View {
@@ -148,6 +165,18 @@ private struct MeetingDetectionOverlay: View {
                     .buttonStyle(.bordered)
                     .controlSize(.regular)
                     .font(.system(size: 12))
+            }
+
+            // Retroactive capture button
+            if showRetroactive, let onRetroactiveCapture {
+                Button(action: onRetroactiveCapture) {
+                    Label("Capture last \(retroactiveMinutes) min", systemImage: "arrow.counterclockwise")
+                        .font(.system(size: 12, weight: .medium))
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.regular)
+                .tint(.orange)
             }
         }
         .padding(14)

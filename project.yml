@@ -29,7 +29,7 @@ targets:
       - path: Clio
         excludes:
           - "Resources/Models/*.bin"
-      - path: Clio/Resources/Models/ggml-base.en.bin
+      - path: Clio/Resources/Models/ggml-base.bin
         buildPhase: resources
     dependencies:
       - framework: Vendor/whisper.xcframework

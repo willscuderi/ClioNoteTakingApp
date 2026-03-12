@@ -15,28 +15,28 @@ final class LLMCoordinator: LLMServiceProtocol {
         self.ollama = ollama
     }
 
-    func summarize(transcript: String, provider: LLMProvider, model: LLMModel? = nil) async throws -> String {
+    func summarize(transcript: String, provider: LLMProvider, model: LLMModel? = nil, systemPrompt: String? = nil) async throws -> String {
         let resolvedModel = model ?? provider.defaultModel
         logger.info("Summarizing with \(provider.rawValue) / \(resolvedModel.id)")
         switch provider {
-        case .openai: return try await openAI.summarize(transcript: transcript, provider: provider, model: resolvedModel)
-        case .claude: return try await claude.summarize(transcript: transcript, provider: provider, model: resolvedModel)
-        case .gemini: return try await gemini.summarize(transcript: transcript, provider: provider, model: resolvedModel)
-        case .ollama: return try await ollama.summarize(transcript: transcript, provider: provider, model: resolvedModel)
+        case .openai: return try await openAI.summarize(transcript: transcript, provider: provider, model: resolvedModel, systemPrompt: systemPrompt)
+        case .claude: return try await claude.summarize(transcript: transcript, provider: provider, model: resolvedModel, systemPrompt: systemPrompt)
+        case .gemini: return try await gemini.summarize(transcript: transcript, provider: provider, model: resolvedModel, systemPrompt: systemPrompt)
+        case .ollama: return try await ollama.summarize(transcript: transcript, provider: provider, model: resolvedModel, systemPrompt: systemPrompt)
         case .grok:
             logger.warning("Grok not yet implemented")
             throw LLMError.apiError("Grok is not yet supported")
         }
     }
 
-    func summarizeStreaming(transcript: String, provider: LLMProvider, model: LLMModel? = nil) -> AsyncThrowingStream<String, Error> {
+    func summarizeStreaming(transcript: String, provider: LLMProvider, model: LLMModel? = nil, systemPrompt: String? = nil) -> AsyncThrowingStream<String, Error> {
         let resolvedModel = model ?? provider.defaultModel
         logger.info("Streaming summary with \(provider.rawValue) / \(resolvedModel.id)")
         switch provider {
-        case .openai: return openAI.summarizeStreaming(transcript: transcript, provider: provider, model: resolvedModel)
-        case .claude: return claude.summarizeStreaming(transcript: transcript, provider: provider, model: resolvedModel)
-        case .gemini: return gemini.summarizeStreaming(transcript: transcript, provider: provider, model: resolvedModel)
-        case .ollama: return ollama.summarizeStreaming(transcript: transcript, provider: provider, model: resolvedModel)
+        case .openai: return openAI.summarizeStreaming(transcript: transcript, provider: provider, model: resolvedModel, systemPrompt: systemPrompt)
+        case .claude: return claude.summarizeStreaming(transcript: transcript, provider: provider, model: resolvedModel, systemPrompt: systemPrompt)
+        case .gemini: return gemini.summarizeStreaming(transcript: transcript, provider: provider, model: resolvedModel, systemPrompt: systemPrompt)
+        case .ollama: return ollama.summarizeStreaming(transcript: transcript, provider: provider, model: resolvedModel, systemPrompt: systemPrompt)
         case .grok:
             return AsyncThrowingStream { $0.finish(throwing: LLMError.apiError("Grok is not yet supported")) }
         }
